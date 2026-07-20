@@ -136,25 +136,24 @@ export class Publisher {
 
   async confirmWrite(operationId: string): Promise<PublishBundle> {
     const operation = this.requireOperation(operationId, "review");
-    await this.repository.ensureClean();
-    await requireGit(this.repository.repositoryPath, [
-      "fetch",
-      "--prune",
-      "origin",
-      "main",
-    ]);
-    const remoteCommit = await this.repository.remoteCommit();
-    const currentCommit = await this.repository.currentCommit();
-    if (
-      operation.draft.baseCommit !== remoteCommit ||
-      operation.draft.baseCommit !== currentCommit
-    ) {
-      throw new Error(
-        "A main remota mudou. A revisão anterior não pode ser publicada.",
-      );
-    }
-
     try {
+      await this.repository.ensureClean();
+      await requireGit(this.repository.repositoryPath, [
+        "fetch",
+        "--prune",
+        "origin",
+        "main",
+      ]);
+      const remoteCommit = await this.repository.remoteCommit();
+      const currentCommit = await this.repository.currentCommit();
+      if (
+        operation.draft.baseCommit !== remoteCommit ||
+        operation.draft.baseCommit !== currentCommit
+      ) {
+        throw new Error(
+          "A main remota mudou. A revisão anterior não pode ser publicada.",
+        );
+      }
       await setJournalState(operation.stagingRoot, "writing");
       const mdxRelativePath = operation.relativePaths[0]!;
       let mdxDestination = await resolveConfinedForWrite(

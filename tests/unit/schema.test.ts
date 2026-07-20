@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   dateSchema,
   EXPECTED_REMOTE_URL,
+  localDraftSchema,
   remoteUrlSchema,
 } from "../../src/shared/schema";
+import type { LessonDraft } from "../../src/shared/types";
 
 describe("schemas de entrada", () => {
   it("aceita somente datas reais em YYYY-MM-DD", () => {
@@ -21,5 +23,29 @@ describe("schemas de entrada", () => {
     expect(remoteUrlSchema.safeParse("https://github.com/outro/repo").success).toBe(
       false,
     );
+  });
+
+  it("aceita rascunho local ainda incompleto", () => {
+    const draft: LessonDraft = {
+      id: "draft-id",
+      schemaVersion: 1,
+      baseCommit: "",
+      slug: "",
+      titulo: "MEU NOME E TIAGO",
+      resumo: "",
+      tags: [],
+      dificuldade: "iniciante",
+      dataPublicacao: "2026-07-20",
+      autores: [],
+      preRequisitos: [],
+      videos: [],
+      linksExternos: [],
+      status: "rascunho",
+      permiteComentarios: false,
+      images: [],
+      body: [{ id: "block-id", kind: "paragraph", markdown: "" }],
+    };
+    const result = localDraftSchema.safeParse(draft);
+    expect(result.success).toBe(true);
   });
 });

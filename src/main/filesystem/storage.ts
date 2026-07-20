@@ -2,7 +2,7 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promise
 import path from "node:path";
 
 import type { LessonDraft } from "../../shared/types";
-import { lessonDraftSchema, remoteUrlSchema } from "../../shared/schema";
+import { localDraftSchema, remoteUrlSchema } from "../../shared/schema";
 import { resolveConfined } from "../../shared/paths";
 
 export type AppDirectories = Readonly<{
@@ -81,7 +81,7 @@ export async function saveDraft(
   directories: AppDirectories,
   draft: LessonDraft,
 ): Promise<void> {
-  const validated = lessonDraftSchema.parse(draft);
+  const validated = localDraftSchema.parse(draft);
   await writeJsonAtomic(
     resolveConfined(directories.drafts, `${validated.id}.json`),
     validated,
@@ -96,7 +96,7 @@ export async function loadDraft(
   const raw = JSON.parse(
     await readFile(resolveConfined(directories.drafts, `${id}.json`), "utf8"),
   );
-  return lessonDraftSchema.parse(raw);
+  return localDraftSchema.parse(raw) as LessonDraft;
 }
 
 export async function listDrafts(directories: AppDirectories): Promise<LessonDraft[]> {

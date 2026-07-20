@@ -337,6 +337,8 @@ textarea {
   display: block;
   margin: 8px 0;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.5;
 }
 
 dt {
@@ -349,6 +351,15 @@ dt {
 
 dd {
   margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.relations {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
 }
 
 .empty {

@@ -91,6 +91,55 @@ export const lessonDraftSchema = z.object({
   body: z.array(contentBlockSchema).min(1, "Adicione conteúdo à Aula."),
 });
 
+const localContentBlockSchema = z.discriminatedUnion("kind", [
+  z.object({ id: z.string(), kind: z.literal("paragraph"), markdown: z.string() }),
+  z.object({
+    id: z.string(),
+    kind: z.literal("heading"),
+    level: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+    text: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    kind: z.literal("unordered-list"),
+    items: z.array(z.string()),
+  }),
+  z.object({
+    id: z.string(),
+    kind: z.literal("ordered-list"),
+    items: z.array(z.string()),
+  }),
+  z.object({
+    id: z.string(),
+    kind: z.literal("image"),
+    imageId: z.string(),
+    alt: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    kind: z.literal("code"),
+    language: z.string(),
+    code: z.string(),
+  }),
+  z.object({ id: z.string(), kind: z.literal("quote"), markdown: z.string() }),
+  z.object({ id: z.string(), kind: z.literal("separator") }),
+]);
+
+export const localDraftSchema = lessonDraftSchema.extend({
+  slug: z.string(),
+  titulo: z.string(),
+  resumo: z.string(),
+  tags: z.array(z.string()),
+  autores: z.array(z.string()),
+  preRequisitos: z.array(z.string()),
+  videos: z.array(z.string()),
+  linksExternos: z.array(z.object({ titulo: z.string(), url: z.string() })),
+  repositorioGithub: z.string().optional(),
+  dataPublicacao: z.string(),
+  dataAtualizacao: z.string().optional(),
+  body: z.array(localContentBlockSchema).min(1),
+});
+
 export const EXPECTED_REMOTE_URL = "https://github.com/Tiago1a2a3a/Site_Gear";
 
 export const remoteUrlSchema = httpsUrl

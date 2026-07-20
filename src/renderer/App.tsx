@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   CatalogEntry,
   ContentBlock,
@@ -203,9 +203,29 @@ function Catalog({ entries }: { entries: CatalogEntry[] }) {
                 <dt>Origem</dt>
                 <dd>{selected.sourcePath}</dd>
                 <dt>Depende de</dt>
-                <dd>{selected.outgoingRelations.join(", ") || "—"}</dd>
+                <dd>
+                  {selected.outgoingRelations.length ? (
+                    <ul className="relations">
+                      {selected.outgoingRelations.map((relation) => (
+                        <li key={relation}>{relation}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
                 <dt>Usado por</dt>
-                <dd>{selected.incomingRelations.join(", ") || "—"}</dd>
+                <dd>
+                  {selected.incomingRelations.length ? (
+                    <ul className="relations">
+                      {selected.incomingRelations.map((relation) => (
+                        <li key={relation}>{relation}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
               </dl>
             </>
           ) : (
@@ -414,10 +434,12 @@ function LessonEditor({
   initialDraft,
   catalog,
   onSaved,
+  onDraftChange,
 }: {
   initialDraft: LessonDraft;
   catalog: CatalogEntry[];
   onSaved(): void;
+  onDraftChange(draft: LessonDraft): void;
 }) {
   const [draft, setDraft] = useState(initialDraft);
   const [step, setStep] = useState(1);
@@ -426,16 +448,21 @@ function LessonEditor({
   const [review, setReview] = useState<ReviewBundle>();
   const [publish, setPublish] = useState<PublishBundle>();
   const [publishedCommit, setPublishedCommit] = useState("");
+  const autoSlug = useRef(initialDraft.slug === toSlug(initialDraft.titulo));
   const set = <K extends keyof LessonDraft>(key: K, value: LessonDraft[K]) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
-    const timer = window.setTimeout(
-      () => void window.gearContentStudio.saveDraft(draft),
-      750,
-    );
-    return () => window.clearTimeout(timer);
-  }, [draft]);
+    onDraftChange(draft);
+    const save = () => void window.gearContentStudio.saveDraft(draft);
+    const timer = window.setTimeout(save, 750);
+    window.addEventListener("beforeunload", save);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("beforeunload", save);
+      save();
+    };
+  }, [draft, onDraftChange]);
 
   const lessons = catalog.filter((entry) => entry.type === "aula");
   const prepare = async () => {
@@ -443,7 +470,7 @@ function LessonEditor({
     setError("");
     const result = await window.gearContentStudio.prepareReview(draft);
     setBusy(false);
-    if (!result.ok) return setError(result.error.message);
+    if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
     setReview(result.value);
   };
   const write = async () => {
@@ -455,7 +482,7 @@ function LessonEditor({
     setBusy(true);
     const result = await window.gearContentStudio.confirmWrite(review.operationId);
     setBusy(false);
-    if (!result.ok) return setError(result.error.message);
+    if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
     setPublish(result.value);
   };
   const publishNow = async () => {
@@ -469,7 +496,7 @@ function LessonEditor({
     setBusy(true);
     const result = await window.gearContentStudio.confirmPublish(publish.operationId);
     setBusy(false);
-    if (!result.ok) return setError(result.error.message);
+    if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
     setPublishedCommit(result.value.commit);
     onSaved();
   };
@@ -512,7 +539,7 @@ function LessonEditor({
                 setDraft((current) => ({
                   ...current,
                   titulo,
-                  slug: current.slug ? current.slug : toSlug(titulo),
+                  slug: autoSlug.current ? toSlug(titulo) : current.slug,
                 }));
               }}
             />
@@ -521,7 +548,10 @@ function LessonEditor({
             Slug
             <input
               value={draft.slug}
-              onChange={(event) => set("slug", toSlug(event.target.value))}
+              onChange={(event) => {
+                autoSlug.current = false;
+                set("slug", toSlug(event.target.value));
+              }}
             />
           </label>
           <label>
@@ -853,6 +883,9 @@ export function App() {
     if (draftsResult.ok) setDrafts(draftsResult.value);
   };
   useEffect(() => void refresh(), []);
+  useEffect(() => {
+    if (screen === "rascunhos") void refresh();
+  }, [screen]);
 
   const synchronize = async () => {
     setBusy(true);
@@ -866,6 +899,10 @@ export function App() {
     setActiveDraft(createDraft(environment?.currentCommit));
     setScreen("nova-aula");
   };
+  const updateActiveDraft = useCallback((draft: LessonDraft) => {
+    setActiveDraft(draft);
+    setDrafts((current) => [draft, ...current.filter((item) => item.id !== draft.id)]);
+  }, []);
   return (
     <div className="shell">
       <header className="topbar">
@@ -920,6 +957,7 @@ export function App() {
             initialDraft={activeDraft}
             catalog={catalog}
             onSaved={() => void refresh()}
+            onDraftChange={updateActiveDraft}
           />
         )}
         {screen === "rascunhos" && (
@@ -947,7 +985,13 @@ export function App() {
                     <button
                       onClick={async () => {
                         if (!window.confirm("Excluir este rascunho local?")) return;
-                        await window.gearContentStudio.deleteDraft(draft.id);
+                        const result = await window.gearContentStudio.deleteDraft(
+                          draft.id,
+                        );
+                        if (!result.ok) {
+                          setError(`${result.error.title}: ${result.error.message}`);
+                          return;
+                        }
                         await refresh();
                       }}
                     >

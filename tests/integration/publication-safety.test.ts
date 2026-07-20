@@ -121,7 +121,9 @@ describe("falhas de publicação são seguras", () => {
     await expect(
       access(path.join(context.repository.repositoryPath, review.mdxRelativePath)),
     ).rejects.toThrow();
-    await context.publisher.cancel(review.operationId);
+    const retry = draft(await context.repository.currentCommit(), "aula-segura-retry");
+    const retryReview = await context.publisher.prepareReview(retry);
+    await context.publisher.cancel(retryReview.operationId);
   });
 
   it("remove somente o arquivo criado quando o validador falha antes do stage", async () => {
