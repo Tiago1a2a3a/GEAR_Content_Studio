@@ -15,7 +15,7 @@ gate adicional.
 
 ## Instalar
 
-1. Execute `GEAR Content Studio Setup 0.3.0.exe`.
+1. Execute `GEAR Content Studio Setup 0.3.1.exe`.
 2. Escolha a pasta de instalação.
 3. Abra **GEAR Content Studio** pelo menu Iniciar ou atalho.
 4. Em **Configurações**, confirme o remoto fixo

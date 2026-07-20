@@ -86,8 +86,8 @@ button {
 }
 
 .connection i.online {
-  background: #e32935;
-  box-shadow: 0 0 0 3px rgb(227 41 53 / 12%);
+  background: #2da44e;
+  box-shadow: 0 0 0 3px rgb(45 164 78 / 14%);
 }
 
 .sidebar {
