@@ -140,6 +140,10 @@
     {
       "kind": "image",
       "pattern": "^public/images/content/(aprendizado/(cursos|trilhas)|projetos|noticias)/[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*\\.(png|jpg|jpeg|webp)$"
+    },
+    {
+      "kind": "download",
+      "pattern": "^public/downloads/aulas/[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*\\.(pdf|txt|zip)$"
     }
   ],
   "forbiddenMdxPatterns": [

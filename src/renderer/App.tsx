@@ -189,7 +189,7 @@ function Home({
           <p>Clone gerenciado, validação completa e duas confirmações antes do push.</p>
         </div>
         <button className="primary" onClick={onCreate}>
-          Criar nova Aula
+          Criar novo conteúdo
         </button>
       </div>
       <div className="status-grid">
@@ -243,9 +243,11 @@ function Home({
 function Catalog({
   entries,
   onDelete,
+  onEdit,
 }: {
   entries: CatalogEntry[];
   onDelete(entry: CatalogEntry): Promise<boolean>;
+  onEdit(entry: CatalogEntry): Promise<void>;
 }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
@@ -370,6 +372,9 @@ function Catalog({
               >
                 {deleting ? "Excluindo…" : "Excluir publicado"}
               </button>
+              <button disabled={deleting} onClick={() => void onEdit(selected)}>
+                Editar conteúdo
+              </button>
             </>
           ) : (
             <div className="empty">Selecione um conteúdo para ver detalhes.</div>
@@ -389,6 +394,7 @@ function BlockEditor({
   images: LessonDraft["images"];
   onChange(blocks: ContentBlock[]): void;
 }) {
+  const [draggedIndex, setDraggedIndex] = useState<number>();
   const add = (kind: ContentBlock["kind"]) => {
     const id = randomUUID();
     const block: ContentBlock =
@@ -442,9 +448,26 @@ function BlockEditor({
       </div>
       <div className="blocks">
         {blocks.map((block, index) => (
-          <article className="block" key={block.id}>
+          <article
+            className="block"
+            key={block.id}
+            draggable
+            onDragStart={() => setDraggedIndex(index)}
+            onDragEnd={() => setDraggedIndex(undefined)}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              if (draggedIndex === undefined || draggedIndex === index) return;
+              const next = [...blocks];
+              const [moved] = next.splice(draggedIndex, 1);
+              if (!moved) return;
+              next.splice(index, 0, moved);
+              setDraggedIndex(undefined);
+              onChange(next);
+            }}
+          >
             <header>
-              <strong>{block.kind}</strong>
+              <strong title="Arraste para reordenar">⠿ {block.kind}</strong>
               <div>
                 <button
                   type="button"
@@ -581,7 +604,7 @@ function LessonEditor({
 }: {
   initialDraft: LessonDraft;
   catalog: CatalogEntry[];
-  onSaved(draftId: string): void;
+  onSaved(draftId: string, commit: string): void;
   onDraftChange(draft: LessonDraft): void;
 }) {
   const [draft, setDraft] = useState(initialDraft);
@@ -659,7 +682,7 @@ function LessonEditor({
       if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
       published.current = true;
       setPublishedCommit(result.value.commit);
-      onSaved(draft.id);
+      onSaved(draft.id, result.value.commit);
     } catch (caught) {
       setError(`Não foi possível publicar: ${unexpectedErrorMessage(caught)}`);
     } finally {
@@ -671,7 +694,9 @@ function LessonEditor({
     <section>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Novo conteúdo • etapa {step} de 4</span>
+          <span className="eyebrow">
+            {draft.sourcePath ? "Editar conteúdo" : "Novo conteúdo"} • etapa {step} de 4
+          </span>
           <h1>
             {
               ["Informações", "Conteúdo", "Recursos e relações", "Revisar e publicar"][
@@ -684,6 +709,7 @@ function LessonEditor({
           <span>Rascunho salvo automaticamente</span>
           <button
             type="button"
+            disabled={Boolean(draft.sourcePath)}
             onClick={() => {
               autoSlug.current = false;
               setReview(undefined);
@@ -800,6 +826,7 @@ function LessonEditor({
             Slug
             <input
               value={draft.slug}
+              disabled={Boolean(draft.sourcePath)}
               onChange={(event) => {
                 autoSlug.current = false;
                 set("slug", toSlug(event.target.value));
@@ -1007,6 +1034,43 @@ function LessonEditor({
                   );
                 })}
               </div>
+              {(draft.trilhaItens ?? []).length > 0 && (
+                <ol>
+                  {(draft.trilhaItens ?? []).map((item, index) => (
+                    <li key={`${item.tipo}:${item.slug}`}>
+                      {item.tipo}: {item.slug}{" "}
+                      <button
+                        type="button"
+                        disabled={index === 0}
+                        onClick={() => {
+                          const next = [...(draft.trilhaItens ?? [])];
+                          [next[index - 1], next[index]] = [
+                            next[index]!,
+                            next[index - 1]!,
+                          ];
+                          set("trilhaItens", next);
+                        }}
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        disabled={index === (draft.trilhaItens?.length ?? 0) - 1}
+                        onClick={() => {
+                          const next = [...(draft.trilhaItens ?? [])];
+                          [next[index], next[index + 1]] = [
+                            next[index + 1]!,
+                            next[index]!,
+                          ];
+                          set("trilhaItens", next);
+                        }}
+                      >
+                        ↓
+                      </button>
+                    </li>
+                  ))}
+                </ol>
+              )}
             </fieldset>
           )}
           {(draft.contentType === "aula" ||
@@ -1086,6 +1150,39 @@ function LessonEditor({
                 }
               />
             </label>
+          )}
+          {(draft.contentType === "aula" || !draft.contentType) && (
+            <div className="wide">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const result = await window.gearContentStudio.chooseDownloads();
+                    if (result.ok) {
+                      set("downloads", [...(draft.downloads ?? []), ...result.value]);
+                    } else {
+                      setError(result.error.message);
+                    }
+                  } catch (caught) {
+                    setError(
+                      `Não foi possível selecionar downloads: ${unexpectedErrorMessage(caught)}`,
+                    );
+                  }
+                }}
+              >
+                Selecionar downloads
+              </button>
+              <ul>
+                {(draft.existingDownloads ?? []).map((download) => (
+                  <li key={download.arquivo}>{download.titulo} (existente)</li>
+                ))}
+                {(draft.downloads ?? []).map((download) => (
+                  <li key={download.id}>
+                    {download.normalizedName} • {Math.round(download.bytes / 1024)} KiB
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {(draft.contentType === "aula" ||
             draft.contentType === "projeto" ||
@@ -1221,6 +1318,9 @@ function LessonEditor({
                 {review.imageRelativePaths.map((item) => (
                   <code key={item}>{item}</code>
                 ))}
+                {review.downloadRelativePaths.map((item) => (
+                  <code key={item}>{item}</code>
+                ))}
                 <h3>MDX</h3>
                 <pre className="mdx">{review.generatedMdx}</pre>
                 {review.issues.map((item) => (
@@ -1277,6 +1377,7 @@ export function App() {
   const [remoteUrl, setRemoteUrl] = useState(EXPECTED_REMOTE_URL);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const refresh = async () => {
     const [environmentResult, catalogResult, draftsResult] = await Promise.all([
@@ -1336,7 +1437,7 @@ export function App() {
           [
             ["inicio", "Início"],
             ["catalogo", "Catálogo"],
-            ["nova-aula", "Nova Aula"],
+            ["nova-aula", "Novo conteúdo"],
             ["rascunhos", "Rascunhos"],
             ["configuracao", "Configurações"],
           ] as const
@@ -1352,6 +1453,21 @@ export function App() {
       </aside>
       <main>
         <ErrorMessage message={error} />
+        {notice && (
+          <div className="alert success" role="status">
+            {notice}
+            <button
+              type="button"
+              onClick={() =>
+                void window.gearContentStudio.openExternalHttps(
+                  "https://github.com/Tiago1a2a3a/Site_Gear/actions",
+                )
+              }
+            >
+              Ver deploy no GitHub
+            </button>
+          </div>
+        )}
         {screen === "inicio" && (
           <Home
             environment={environment}
@@ -1364,6 +1480,27 @@ export function App() {
         {screen === "catalogo" && (
           <Catalog
             entries={catalog}
+            onEdit={async (entry) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await window.gearContentStudio.loadPublished({
+                  sourcePath: entry.sourcePath,
+                });
+                if (!result.ok) {
+                  setError(`${result.error.title}: ${result.error.message}`);
+                  return;
+                }
+                setActiveDraft(result.value);
+                setScreen("nova-aula");
+              } catch (caught) {
+                setError(
+                  `Não foi possível carregar: ${unexpectedErrorMessage(caught)}`,
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
             onDelete={async (entry) => {
               if (
                 !window.confirm(
@@ -1392,6 +1529,9 @@ export function App() {
                   ),
                 );
                 setError("");
+                setNotice(
+                  `Exclusão confirmada em origin/main (${result.value.commit.slice(0, 8)}). O site será atualizado pelo deploy do Portal.`,
+                );
                 await refresh();
                 return true;
               } catch (caught) {
@@ -1408,10 +1548,13 @@ export function App() {
             key={activeDraft.id}
             initialDraft={activeDraft}
             catalog={catalog}
-            onSaved={(draftId) => {
+            onSaved={(draftId, commit) => {
               setDrafts((current) => current.filter((draft) => draft.id !== draftId));
               setActiveDraft(undefined);
               setScreen("catalogo");
+              setNotice(
+                `Publicação confirmada em origin/main (${commit.slice(0, 8)}). Acompanhe o deploy antes de validar o site.`,
+              );
               void refresh();
             }}
             onDraftChange={updateActiveDraft}
@@ -1428,7 +1571,7 @@ export function App() {
             <div className="draft-list">
               {drafts.map((draft) => (
                 <article className="panel" key={draft.id}>
-                  <h2>{draft.titulo || "Aula sem título"}</h2>
+                  <h2>{draft.titulo || "Conteúdo sem título"}</h2>
                   <code>{draft.slug || draft.id}</code>
                   <div className="toolbar">
                     <button

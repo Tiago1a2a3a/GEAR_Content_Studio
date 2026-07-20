@@ -6,7 +6,8 @@
 - preload expõe somente métodos IPC nomeados e tipados;
 - argumentos Git são separados e executados com `shell: false`;
 - remoto e branch estão limitados ao Portal aprovado e a `main`;
-- escrita limitada a uma Aula nova e suas imagens;
+- escrita limitada aos cinco tipos de conteúdo previstos e aos seus recursos;
+- exclusão limitada a publicações registradas pelo próprio aplicativo;
 - caminhos são confinados e junctions/symlinks externos são rejeitados;
 - preview estrutural não executa MDX;
 - contrato congelado é conferido antes da escrita;
@@ -14,9 +15,11 @@
 
 ## Falhas antes do commit
 
-Cada operação possui lock e journal com estado, caminhos relativos e hash dos
-arquivos criados. Em uma falha anterior ao stage, o app remove somente arquivos
-registrados pela operação e cujo conteúdo não mudou. O rascunho permanece.
+Cada publicação possui lock e journal com estado, caminhos relativos, backups de
+arquivos alterados e hash dos arquivos criados. Em uma falha anterior ao stage,
+o app restaura alterações e remove somente arquivos registrados pela operação
+cujo conteúdo não mudou. O rascunho permanece. Uma exclusão que falha antes do
+commit restaura os caminhos rastreados a partir do commit atual.
 
 Se o app for encerrado durante uma operação, a próxima abertura verifica se o PID
 anterior ainda existe e pede confirmação antes de liberar um lock órfão. Arquivos

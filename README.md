@@ -1,15 +1,16 @@
 # GEAR Content Studio
 
-Aplicativo desktop local para consultar o conteúdo do Portal GEAR e criar novas
-Aulas em MDX com validação, preview, diff e publicação Git segura.
+Aplicativo desktop local para consultar e gerenciar o conteúdo MDX do Portal
+GEAR, com validação, preview, diff e publicação Git segura.
 
 O MVP não incorpora IA generativa. Ele opera somente sobre o clone gerenciado do
-repositório aprovado `https://github.com/Tiago1a2a3a/Site_Gear`, cria Aulas e
-imagens novas e publica em `origin/main` após duas confirmações.
+repositório aprovado `https://github.com/Tiago1a2a3a/Site_Gear`. Cria e edita
+Aulas, Cursos, Trilhas, Projetos e Notícias; publica em `origin/main` após duas
+confirmações e só exclui conteúdo cuja criação tenha sido registrada pelo app.
 
 ## Instalação e uso
 
-O instalador x64 fica em `dist/GEAR Content Studio Setup 0.1.0.exe`. Consulte:
+O instalador x64 fica em `dist/GEAR Content Studio Setup 0.2.0.exe`. Consulte:
 
 - [Instalação e uso](docs/INSTALACAO-E-USO.md)
 - [Segurança e recuperação](docs/SEGURANCA-E-RECUPERACAO.md)

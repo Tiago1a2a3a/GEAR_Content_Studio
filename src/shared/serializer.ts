@@ -82,7 +82,9 @@ function serializeFrontmatter(draft: LessonDraft): Record<string, unknown> {
   }
 
   const base = { slug: draft.slug, titulo: draft.titulo.trim() };
-  const cover = banner ? publicImagePath(draft, banner.normalizedName) : "";
+  const cover = banner
+    ? publicImagePath(draft, banner.normalizedName)
+    : (draft.existingBannerPath ?? "");
   const tags = draft.tags.map((value) => value.trim());
 
   if (type === "aula") {
@@ -99,6 +101,17 @@ function serializeFrontmatter(draft: LessonDraft): Record<string, unknown> {
       ...(draft.preRequisitos.length ? { preRequisitos: draft.preRequisitos } : {}),
       ...(draft.videos.length ? { videos: draft.videos } : {}),
       ...(draft.linksExternos.length ? { linksExternos: draft.linksExternos } : {}),
+      ...(draft.downloads?.length || draft.existingDownloads?.length
+        ? {
+            downloads: [
+              ...(draft.existingDownloads ?? []),
+              ...(draft.downloads ?? []).map((download) => ({
+                titulo: download.originalName,
+                arquivo: `/downloads/aulas/${draft.slug}/${download.normalizedName}`,
+              })),
+            ],
+          }
+        : {}),
       ...(draft.repositorioGithub
         ? { repositorioGithub: draft.repositorioGithub }
         : {}),
@@ -146,11 +159,14 @@ function serializeFrontmatter(draft: LessonDraft): Record<string, unknown> {
       ...(draft.descricaoLonga?.trim()
         ? { descricaoLonga: draft.descricaoLonga.trim() }
         : {}),
-      ...(draft.images.length
+      ...(draft.images.length || draft.existingImagePaths?.length
         ? {
-            imagens: draft.images.map((image) =>
-              publicImagePath(draft, image.normalizedName),
-            ),
+            imagens: [
+              ...(draft.existingImagePaths ?? []),
+              ...draft.images.map((image) =>
+                publicImagePath(draft, image.normalizedName),
+              ),
+            ],
           }
         : {}),
       ...(draft.videos.length ? { videos: draft.videos } : {}),

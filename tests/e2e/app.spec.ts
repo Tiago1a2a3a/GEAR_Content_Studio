@@ -10,7 +10,9 @@ test("abre com renderer isolado e navegação principal", async () => {
   });
   const window = await app.firstWindow();
   await expect(window.getByText("GEAR Content Studio").first()).toBeVisible();
-  await expect(window.getByRole("button", { name: "Criar nova Aula" })).toBeVisible();
+  await expect(
+    window.getByRole("button", { name: "Criar novo conteúdo" }),
+  ).toBeVisible();
   expect(await window.evaluate(() => typeof (window as any).require)).toBe("undefined");
   await app.close();
 });
@@ -22,7 +24,7 @@ test("atualiza slug ao digitar e preserva rascunho ao navegar", async () => {
     args: ["out/main/index.js", `--user-data-dir=${userData}`],
   });
   const window = await app.firstWindow();
-  await window.getByRole("button", { name: "Criar nova Aula" }).click();
+  await window.getByRole("button", { name: "Criar novo conteúdo" }).click();
   await window.getByLabel("Título").pressSequentially("MEU NOME E TIAGO");
   await expect(window.getByLabel("Slug")).toHaveValue("meu-nome-e-tiago");
   await window.getByRole("button", { name: "Rascunhos", exact: true }).click();
@@ -48,7 +50,7 @@ test("preenche casos GPT numerados para os cinco tipos", async () => {
   ] as const;
 
   for (const [type, title] of expected) {
-    await window.getByRole("button", { name: "Nova Aula", exact: true }).click();
+    await window.getByRole("button", { name: "Novo conteúdo", exact: true }).click();
     await window.getByLabel("Tipo de conteúdo").selectOption(type);
     await window.getByRole("button", { name: "Preencher caso GPT" }).click();
     await expect(window.getByLabel("Título")).toHaveValue(title);

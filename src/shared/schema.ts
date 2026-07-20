@@ -67,6 +67,18 @@ export const pendingImageSchema = z.object({
   height: z.number().int().positive(),
 });
 
+export const pendingDownloadSchema = z.object({
+  id: nonEmpty,
+  sourcePath: nonEmpty,
+  originalName: nonEmpty,
+  normalizedName: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*\.(pdf|txt|zip)$/),
+  bytes: z
+    .number()
+    .int()
+    .positive()
+    .max(25 * 1024 * 1024),
+});
+
 export const lessonDraftSchema = z.object({
   id: nonEmpty,
   schemaVersion: z.literal(1),
@@ -101,6 +113,13 @@ export const lessonDraftSchema = z.object({
   destaque: z.boolean().optional(),
   documentacao: httpsUrl.optional(),
   ordem: z.number().int().nonnegative().optional(),
+  sourcePath: z.string().max(300).optional(),
+  existingBannerPath: z.string().optional(),
+  existingImagePaths: z.array(z.string()).optional(),
+  downloads: z.array(pendingDownloadSchema).optional(),
+  existingDownloads: z
+    .array(z.object({ titulo: z.string(), arquivo: z.string() }))
+    .optional(),
 });
 
 const localContentBlockSchema = z.discriminatedUnion("kind", [

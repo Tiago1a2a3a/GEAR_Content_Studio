@@ -11,6 +11,7 @@ número daquele tipo (`001`, `002`, `003`...).
    **Preencher caso GPT**.
 4. Na etapa **Recursos e relações**, selecione ao menos uma imagem PNG, JPG ou
    WebP. O app usa a primeira imagem como capa quando o contrato exige.
+   Para Aula, selecione também um PDF, TXT ou ZIP para testar downloads.
 5. Revise o MDX, prepare as alterações e confirme a publicação.
 
 ## Ordem dos casos
@@ -38,6 +39,8 @@ número daquele tipo (`001`, `002`, `003`...).
 - O arquivo aparece em `main` no GitHub.
 - O Portal passa a mostrar o conteúdo após o deploy.
 - Uma nova tentativa com o mesmo slug é bloqueada.
+- **Editar conteúdo** permite alterar o status e publicar um novo commit sem
+  duplicar o arquivo.
 
 Para testar exclusão, remova primeiro a Trilha, depois o Curso e por último a
 Aula. Essa ordem evita o bloqueio correto por dependências.

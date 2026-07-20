@@ -4,8 +4,8 @@ import { randomUUID } from "node:crypto";
 
 import { imageSize } from "image-size";
 
-import { normalizeImageName, uniqueImageName } from "../../shared/slug";
-import type { PendingImage } from "../../shared/types";
+import { normalizeImageName, toSlug, uniqueImageName } from "../../shared/slug";
+import type { PendingDownload, PendingImage } from "../../shared/types";
 
 const mimeByExtension = {
   ".png": "image/png",
@@ -71,6 +71,40 @@ export async function inspectImages(paths: readonly string[]): Promise<PendingIm
       bytes: metadata.size,
       width: dimensions.width,
       height: dimensions.height,
+    });
+  }
+  return results;
+}
+
+export async function inspectDownloads(
+  paths: readonly string[],
+): Promise<PendingDownload[]> {
+  const allowed = new Set([".pdf", ".txt", ".zip"]);
+  const occupied = new Set<string>();
+  const results: PendingDownload[] = [];
+  for (const sourcePath of paths) {
+    const extension = path.extname(sourcePath).toLowerCase();
+    if (!allowed.has(extension)) {
+      throw new Error(`Formato de download não permitido: ${extension}`);
+    }
+    const metadata = await stat(sourcePath);
+    if (!metadata.isFile() || metadata.size > 25 * 1024 * 1024) {
+      throw new Error("O download deve ser um arquivo de até 25 MiB.");
+    }
+    const base = toSlug(path.basename(sourcePath, extension)) || "arquivo";
+    let normalizedName = `${base}${extension}`;
+    let suffix = 2;
+    while (occupied.has(normalizedName.toLowerCase())) {
+      normalizedName = `${base}-${suffix}${extension}`;
+      suffix += 1;
+    }
+    occupied.add(normalizedName.toLowerCase());
+    results.push({
+      id: randomUUID(),
+      sourcePath,
+      originalName: path.basename(sourcePath),
+      normalizedName,
+      bytes: metadata.size,
     });
   }
   return results;

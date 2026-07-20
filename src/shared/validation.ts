@@ -45,7 +45,14 @@ export function validateDraft(
   }
 
   const type = draft.contentType ?? "aula";
-  if (catalog.some((entry) => entry.type === type && entry.slug === draft.slug)) {
+  if (
+    catalog.some(
+      (entry) =>
+        entry.type === type &&
+        entry.slug === draft.slug &&
+        entry.sourcePath !== draft.sourcePath,
+    )
+  ) {
     issues.push(
       issue(
         "DUPLICATE_SLUG",
@@ -73,7 +80,11 @@ export function validateDraft(
       ),
     );
   }
-  if (["curso", "trilha", "noticia"].includes(type) && !draft.bannerImageId) {
+  if (
+    ["curso", "trilha", "noticia"].includes(type) &&
+    !draft.bannerImageId &&
+    !draft.existingBannerPath
+  ) {
     issues.push(
       issue(
         "COVER_REQUIRED",

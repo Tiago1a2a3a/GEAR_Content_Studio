@@ -23,10 +23,17 @@ import {
   fileMatchesJournal,
   readOperationJournal,
   recordCreatedFile,
+  recordModifiedFile,
   setJournalState,
   type OperationJournalState,
 } from "../filesystem/operation-journal";
-import { deleteDraft, type AppDirectories } from "../filesystem/storage";
+import {
+  deleteDraft,
+  getPublication,
+  recordPublication,
+  removePublication,
+  type AppDirectories,
+} from "../filesystem/storage";
 import { requireGit, runGit } from "../git/runner";
 import { verifyPortalContract, type PortalContractLock } from "../validation/contract";
 import { ManagedRepository } from "./repository";
@@ -36,6 +43,8 @@ type PendingOperation = {
   stagingRoot: string;
   relativePaths: string[];
   writtenPaths: string[];
+  modifiedPaths: Array<Readonly<{ destination: string; backup: string }>>;
+  isUpdate: boolean;
   state: "review" | "written" | "committed" | "blocked";
 };
 
@@ -62,6 +71,12 @@ export class Publisher {
   ): Promise<Readonly<{ commit: string; pushedTo: "origin/main" }>> {
     if (!isAllowedContentPath(sourcePath))
       throw new Error("Só é permitido excluir um MDX de conteúdo do Portal.");
+    const publication = await getPublication(this.directories, sourcePath);
+    if (!publication) {
+      throw new Error(
+        "Exclusão bloqueada: este arquivo não possui registro de criação pelo app.",
+      );
+    }
     await this.repository.ensureClean();
     await requireGit(this.repository.repositoryPath, [
       "fetch",
@@ -82,35 +97,80 @@ export class Publisher {
       throw new Error(
         `Exclusão bloqueada: este conteúdo é usado por ${entry.incomingRelations.join(", ")}.`,
       );
-    const target = await resolveConfinedForWrite(
-      this.repository.repositoryPath,
-      sourcePath,
-    );
-    await rm(target, { force: false });
-    await requireGit(this.repository.repositoryPath, ["add", "--", sourcePath]);
-    const commitMessage = `content(${entry.type}): remove ${entry.slug}`;
-    await requireGit(this.repository.repositoryPath, ["commit", "-m", commitMessage]);
-    await requireGit(this.repository.repositoryPath, ["push", "origin", "HEAD:main"]);
-    const commit = await this.repository.currentCommit();
-    await requireGit(this.repository.repositoryPath, [
-      "fetch",
-      "--prune",
-      "origin",
-      "main",
-    ]);
-    if ((await this.repository.remoteCommit()) !== commit) {
-      throw new Error("O push da exclusão não foi confirmado em origin/main.");
+    const deletionPaths = [...new Set([sourcePath, ...publication.imagePaths])];
+    assertAllowedPaths(deletionPaths);
+    const operationId = randomUUID();
+    await this.#lock.acquire(operationId);
+    let committed = false;
+    try {
+      for (const relativePath of deletionPaths) {
+        await rm(
+          await resolveConfinedForWrite(this.repository.repositoryPath, relativePath),
+          { force: true },
+        );
+      }
+      await this.repository.validatePortalCommand();
+      await requireGit(this.repository.repositoryPath, [
+        "add",
+        "-A",
+        "--",
+        ...deletionPaths,
+      ]);
+      const stagedPaths = (
+        await requireGit(this.repository.repositoryPath, [
+          "diff",
+          "--cached",
+          "--name-only",
+          "-z",
+        ])
+      )
+        .split("\0")
+        .filter(Boolean);
+      assertExactPaths(stagedPaths, deletionPaths, "stage de exclusão");
+      const commitMessage = `content(${entry.type}): remove ${entry.slug}`;
+      await requireGit(this.repository.repositoryPath, ["commit", "-m", commitMessage]);
+      committed = true;
+      await requireGit(this.repository.repositoryPath, ["push", "origin", "HEAD:main"]);
+      const commit = await this.repository.currentCommit();
+      await requireGit(this.repository.repositoryPath, [
+        "fetch",
+        "--prune",
+        "origin",
+        "main",
+      ]);
+      if ((await this.repository.remoteCommit()) !== commit) {
+        throw new Error("O push da exclusão não foi confirmado em origin/main.");
+      }
+      for (const relativePath of deletionPaths) {
+        const remoteFile = await runGit(this.repository.repositoryPath, [
+          "cat-file",
+          "-e",
+          `origin/main:${relativePath}`,
+        ]);
+        if (remoteFile.exitCode === 0) {
+          throw new Error(
+            `O arquivo ainda existe em origin/main após o push: ${relativePath}.`,
+          );
+        }
+      }
+      await removePublication(this.directories, sourcePath);
+      await this.repository.catalog(true);
+      return { commit, pushedTo: "origin/main" };
+    } catch (error) {
+      if (!committed) {
+        await requireGit(this.repository.repositoryPath, [
+          "restore",
+          "--source=HEAD",
+          "--staged",
+          "--worktree",
+          "--",
+          ...deletionPaths,
+        ]).catch(() => undefined);
+      }
+      throw error;
+    } finally {
+      await this.#lock.release(operationId);
     }
-    const remoteFile = await runGit(this.repository.repositoryPath, [
-      "cat-file",
-      "-e",
-      `origin/main:${sourcePath}`,
-    ]);
-    if (remoteFile.exitCode === 0) {
-      throw new Error("O arquivo ainda existe em origin/main após o push.");
-    }
-    await this.repository.catalog(true);
-    return { commit, pushedTo: "origin/main" };
   }
 
   async prepareReview(draft: LessonDraft): Promise<ReviewBundle> {
@@ -144,7 +204,14 @@ export class Publisher {
         projeto: "projetos",
         noticia: "noticias",
       } as const;
-      const mdxRelativePath = `src/content/${directories[draft.contentType ?? "aula"]}/${draft.slug}.mdx`;
+      const expectedMdxPath = `src/content/${directories[draft.contentType ?? "aula"]}/${draft.slug}.mdx`;
+      const mdxRelativePath = draft.sourcePath ?? expectedMdxPath;
+      const isUpdate = Boolean(draft.sourcePath);
+      if (isUpdate && mdxRelativePath !== expectedMdxPath) {
+        throw new Error(
+          "O slug e o tipo não podem ser alterados durante uma atualização.",
+        );
+      }
       const imageDirectory =
         draft.contentType === "aula" || !draft.contentType
           ? "aulas"
@@ -153,23 +220,37 @@ export class Publisher {
         (image) =>
           `public/images/content/${imageDirectory}/${draft.slug}/${image.normalizedName}`,
       );
-      const relativePaths = [mdxRelativePath, ...imageRelativePaths];
+      const downloadRelativePaths = (draft.downloads ?? []).map(
+        (download) => `public/downloads/aulas/${draft.slug}/${download.normalizedName}`,
+      );
+      const relativePaths = [
+        mdxRelativePath,
+        ...imageRelativePaths,
+        ...downloadRelativePaths,
+      ];
       assertAllowedPaths(relativePaths);
       await Promise.all(
-        relativePaths.map(async (relativePath) => {
+        relativePaths.map(async (relativePath, index) => {
           const destination = await resolveConfinedForWrite(
             this.repository.repositoryPath,
             relativePath,
           );
           try {
             await readFile(destination);
+            if (isUpdate && index === 0) return;
             throw new Error(`O destino já existe: ${relativePath}`);
           } catch (error) {
+            if (isUpdate && index === 0) {
+              throw new Error(`O conteúdo original não existe: ${relativePath}`, {
+                cause: error,
+              });
+            }
             if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
           }
         }),
       );
       await mkdir(path.join(stagingRoot, "images"), { recursive: true });
+      await mkdir(path.join(stagingRoot, "downloads"), { recursive: true });
       const generatedMdx = serializeLesson(draft);
       await writeFile(path.join(stagingRoot, "lesson.mdx"), generatedMdx, {
         encoding: "utf8",
@@ -184,12 +265,23 @@ export class Publisher {
           ),
         ),
       );
+      await Promise.all(
+        (draft.downloads ?? []).map((download) =>
+          copyFile(
+            download.sourcePath,
+            path.join(stagingRoot, "downloads", download.normalizedName),
+            constants.COPYFILE_EXCL,
+          ),
+        ),
+      );
       await createOperationJournal(stagingRoot, operationId, draft.baseCommit);
       this.#operations.set(operationId, {
         draft,
         stagingRoot,
         relativePaths,
         writtenPaths: [],
+        modifiedPaths: [],
+        isUpdate,
         state: "review",
       });
       return {
@@ -197,6 +289,7 @@ export class Publisher {
         baseCommit: currentCommit,
         mdxRelativePath,
         imageRelativePaths,
+        downloadRelativePaths,
         generatedMdx,
         issues: issues as ValidationIssue[],
       };
@@ -237,17 +330,29 @@ export class Publisher {
         this.repository.repositoryPath,
         mdxRelativePath,
       );
-      await copyFile(
-        path.join(operation.stagingRoot, "lesson.mdx"),
-        mdxDestination,
-        constants.COPYFILE_EXCL,
-      );
-      operation.writtenPaths.push(mdxDestination);
-      await recordCreatedFile(
-        operation.stagingRoot,
-        this.repository.repositoryPath,
-        mdxRelativePath,
-      );
+      if (operation.isUpdate) {
+        const backup = path.join(operation.stagingRoot, "original.mdx");
+        await copyFile(mdxDestination, backup, constants.COPYFILE_EXCL);
+        await recordModifiedFile(
+          operation.stagingRoot,
+          mdxRelativePath,
+          "original.mdx",
+        );
+        await copyFile(path.join(operation.stagingRoot, "lesson.mdx"), mdxDestination);
+        operation.modifiedPaths.push({ destination: mdxDestination, backup });
+      } else {
+        await copyFile(
+          path.join(operation.stagingRoot, "lesson.mdx"),
+          mdxDestination,
+          constants.COPYFILE_EXCL,
+        );
+        operation.writtenPaths.push(mdxDestination);
+        await recordCreatedFile(
+          operation.stagingRoot,
+          this.repository.repositoryPath,
+          mdxRelativePath,
+        );
+      }
       for (const image of operation.draft.images) {
         const directories = {
           aula: "aulas",
@@ -278,6 +383,29 @@ export class Publisher {
           relativePath,
         );
       }
+      for (const download of operation.draft.downloads ?? []) {
+        const relativePath = `public/downloads/aulas/${operation.draft.slug}/${download.normalizedName}`;
+        let destination = await resolveConfinedForWrite(
+          this.repository.repositoryPath,
+          relativePath,
+        );
+        await mkdir(path.dirname(destination), { recursive: true });
+        destination = await resolveConfinedForWrite(
+          this.repository.repositoryPath,
+          relativePath,
+        );
+        await copyFile(
+          path.join(operation.stagingRoot, "downloads", download.normalizedName),
+          destination,
+          constants.COPYFILE_EXCL,
+        );
+        operation.writtenPaths.push(destination);
+        await recordCreatedFile(
+          operation.stagingRoot,
+          this.repository.repositoryPath,
+          relativePath,
+        );
+      }
       await setJournalState(operation.stagingRoot, "validating");
       await this.repository.validatePortalCommand();
       const rawWorking = await requireGit(this.repository.repositoryPath, [
@@ -289,7 +417,9 @@ export class Publisher {
       const workingPaths = rawWorking
         .split("\0")
         .filter(Boolean)
-        .map((entry) => entry.slice(3));
+        .map((entry) =>
+          /^[ MADRCU?!]{2} /.test(entry) ? entry.slice(3) : entry.slice(2),
+        );
       assertExactPaths(workingPaths, operation.relativePaths, "working tree");
       await setJournalState(operation.stagingRoot, "staging");
       await requireGit(this.repository.repositoryPath, [
@@ -317,7 +447,7 @@ export class Publisher {
         operationId,
         stagedDiff,
         stagedPaths,
-        commitMessage: `content(${operation.draft.contentType ?? "aula"}): adiciona ${operation.draft.slug}`,
+        commitMessage: `content(${operation.draft.contentType ?? "aula"}): ${operation.isUpdate ? "atualiza" : "adiciona"} ${operation.draft.slug}`,
         branch: "main",
       };
     } catch (error) {
@@ -341,7 +471,7 @@ export class Publisher {
     operationId: string,
   ): Promise<Readonly<{ commit: string; pushedTo: "origin/main" }>> {
     const operation = this.requireOperation(operationId, "written");
-    const commitMessage = `content(${operation.draft.contentType ?? "aula"}): adiciona ${operation.draft.slug}`;
+    const commitMessage = `content(${operation.draft.contentType ?? "aula"}): ${operation.isUpdate ? "atualiza" : "adiciona"} ${operation.draft.slug}`;
     await requireGit(this.repository.repositoryPath, ["commit", "-m", commitMessage]);
     await setJournalState(operation.stagingRoot, "committed");
     operation.state = "committed";
@@ -368,13 +498,27 @@ export class Publisher {
     if ((await this.repository.remoteCommit()) !== commit) {
       throw new Error("O push retornou sem confirmar o commit em origin/main.");
     }
-    this.#operations.delete(operationId);
-    await Promise.allSettled([
-      rm(operation.stagingRoot, { recursive: true, force: true }),
-      deleteDraft(this.directories, operation.draft.id),
-      this.#lock.release(operationId),
-      this.repository.catalog(true),
-    ]);
+    try {
+      await recordPublication(this.directories, {
+        sourcePath: operation.relativePaths[0]!,
+        imagePaths: operation.relativePaths.slice(1),
+        lastCommit: commit,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      throw new Error(
+        `A publicação foi confirmada em origin/main (${commit.slice(0, 8)}), mas o registro local de propriedade falhou. Não tente publicar novamente.`,
+        { cause: error },
+      );
+    } finally {
+      this.#operations.delete(operationId);
+      await Promise.allSettled([
+        rm(operation.stagingRoot, { recursive: true, force: true }),
+        deleteDraft(this.directories, operation.draft.id),
+        this.#lock.release(operationId),
+        this.repository.catalog(true),
+      ]);
+    }
     return { commit, pushedTo: "origin/main" };
   }
 
@@ -419,6 +563,17 @@ export class Publisher {
     const preservedPaths: string[] = [];
     if (journal) {
       const canRollback = ["review", "writing", "validating"].includes(journal.state);
+      if (canRollback) {
+        for (const file of journal.modifiedFiles) {
+          await copyFile(
+            path.join(stagingRoot, file.backupName),
+            await resolveConfinedForWrite(
+              this.repository.repositoryPath,
+              file.relativePath,
+            ),
+          );
+        }
+      }
       for (const file of [...journal.createdFiles].reverse()) {
         if (
           canRollback &&
@@ -457,6 +612,9 @@ export class Publisher {
   private async rollbackCreated(operation: PendingOperation): Promise<void> {
     for (const createdPath of operation.writtenPaths.reverse()) {
       await rm(createdPath, { force: true });
+    }
+    for (const modified of operation.modifiedPaths.reverse()) {
+      await copyFile(modified.backup, modified.destination);
     }
   }
 }

@@ -30,6 +30,10 @@ export function registerIpc(service: AppService): void {
     service.listCatalog(filterSchema.parse(filter) as CatalogFilter | undefined),
   );
   ipcMain.handle("gear:choose-images", () => service.chooseImages());
+  ipcMain.handle("gear:choose-downloads", () => service.chooseDownloads());
+  ipcMain.handle("gear:load-published", (_event, input: unknown) =>
+    service.loadPublished(z.object({ sourcePath: z.string().max(300) }).parse(input)),
+  );
   ipcMain.handle("gear:save-draft", (_event, draft: unknown) =>
     service.saveDraft(lessonDraftSchema.parse(draft)),
   );

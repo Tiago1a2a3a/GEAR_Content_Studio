@@ -13,6 +13,7 @@ export type AppDirectories = Readonly<{
   logs: string;
   settings: string;
   operationLock: string;
+  publications: string;
 }>;
 
 export function createDirectories(root: string): AppDirectories {
@@ -24,6 +25,7 @@ export function createDirectories(root: string): AppDirectories {
     logs: path.join(root, "logs"),
     settings: path.join(root, "settings.json"),
     operationLock: path.join(root, "operation.lock"),
+    publications: path.join(root, "published-content.json"),
   };
 }
 
@@ -115,4 +117,68 @@ export async function deleteDraft(
 ): Promise<void> {
   if (!/^[a-f0-9-]{8,}$/i.test(id)) throw new Error("ID de rascunho inválido.");
   await rm(resolveConfined(directories.drafts, `${id}.json`), { force: true });
+}
+
+export type PublicationRecord = Readonly<{
+  sourcePath: string;
+  imagePaths: string[];
+  lastCommit: string;
+  updatedAt: string;
+}>;
+
+async function loadPublicationRecords(
+  directories: AppDirectories,
+): Promise<PublicationRecord[]> {
+  try {
+    const parsed = JSON.parse(
+      await readFile(directories.publications, "utf8"),
+    ) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is PublicationRecord =>
+          Boolean(
+            item &&
+            typeof item === "object" &&
+            typeof (item as PublicationRecord).sourcePath === "string" &&
+            Array.isArray((item as PublicationRecord).imagePaths),
+          ),
+        )
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function recordPublication(
+  directories: AppDirectories,
+  record: PublicationRecord,
+): Promise<void> {
+  const current = await loadPublicationRecords(directories);
+  const previous = current.find((item) => item.sourcePath === record.sourcePath);
+  await writeJsonAtomic(directories.publications, [
+    ...current.filter((item) => item.sourcePath !== record.sourcePath),
+    {
+      ...record,
+      imagePaths: [...new Set([...(previous?.imagePaths ?? []), ...record.imagePaths])],
+    },
+  ]);
+}
+
+export async function getPublication(
+  directories: AppDirectories,
+  sourcePath: string,
+): Promise<PublicationRecord | undefined> {
+  return (await loadPublicationRecords(directories)).find(
+    (item) => item.sourcePath === sourcePath,
+  );
+}
+
+export async function removePublication(
+  directories: AppDirectories,
+  sourcePath: string,
+): Promise<void> {
+  const current = await loadPublicationRecords(directories);
+  await writeJsonAtomic(
+    directories.publications,
+    current.filter((item) => item.sourcePath !== sourcePath),
+  );
 }

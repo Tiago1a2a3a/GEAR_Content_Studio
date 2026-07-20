@@ -23,6 +23,14 @@ export type PendingImage = Readonly<{
   height: number;
 }>;
 
+export type PendingDownload = Readonly<{
+  id: string;
+  sourcePath: string;
+  originalName: string;
+  normalizedName: string;
+  bytes: number;
+}>;
+
 export type ContentBlock =
   | Readonly<{ id: string; kind: "paragraph"; markdown: string }>
   | Readonly<{ id: string; kind: "heading"; level: 2 | 3 | 4; text: string }>
@@ -63,6 +71,11 @@ export type LessonDraft = Readonly<{
   destaque?: boolean;
   documentacao?: string;
   ordem?: number;
+  sourcePath?: string;
+  existingBannerPath?: string;
+  existingImagePaths?: string[];
+  downloads?: PendingDownload[];
+  existingDownloads?: ReadonlyArray<Readonly<{ titulo: string; arquivo: string }>>;
 }>;
 
 export type CatalogEntry = Readonly<{
@@ -101,6 +114,7 @@ export type ReviewBundle = Readonly<{
   baseCommit: string;
   mdxRelativePath: string;
   imageRelativePaths: string[];
+  downloadRelativePaths: string[];
   generatedMdx: string;
   issues: ValidationIssue[];
 }>;
@@ -129,6 +143,8 @@ export type GearContentStudioApi = Readonly<{
   synchronize(): Promise<Result<Readonly<{ commit: string; indexedEntries: number }>>>;
   listCatalog(filter?: CatalogFilter): Promise<Result<CatalogEntry[]>>;
   chooseImages(): Promise<Result<PendingImage[]>>;
+  chooseDownloads(): Promise<Result<PendingDownload[]>>;
+  loadPublished(input: Readonly<{ sourcePath: string }>): Promise<Result<LessonDraft>>;
   saveDraft(draft: LessonDraft): Promise<Result<void>>;
   listDrafts(): Promise<Result<LessonDraft[]>>;
   loadDraft(id: string): Promise<Result<LessonDraft>>;

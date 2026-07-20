@@ -1,7 +1,10 @@
 import { dialog, shell } from "electron";
+import { readFile } from "node:fs/promises";
 
 import portalLockJson from "../../resources/contracts/portal-contract-lock.json";
 import { filterCatalog } from "../shared/catalog";
+import { parsePublishedDraft } from "../shared/draft-parser";
+import { isAllowedContentPath, resolveConfined } from "../shared/paths";
 import { remoteUrlSchema } from "../shared/schema";
 import type {
   CatalogFilter,
@@ -11,7 +14,7 @@ import type {
   Result,
 } from "../shared/types";
 import { fail, ok } from "../shared/types";
-import { inspectImages } from "./filesystem/media";
+import { inspectDownloads, inspectImages } from "./filesystem/media";
 import { SafeLogger } from "./filesystem/logger";
 import {
   deleteDraft,
@@ -148,6 +151,39 @@ export class AppService implements GearContentStudioApi {
     });
   }
 
+  async chooseDownloads() {
+    return this.wrap("CHOOSE_DOWNLOADS", async () => {
+      const selection = await dialog.showOpenDialog({
+        title: "Selecionar downloads da Aula",
+        properties: ["openFile", "multiSelections"],
+        filters: [{ name: "Downloads", extensions: ["pdf", "txt", "zip"] }],
+      });
+      return selection.canceled ? [] : inspectDownloads(selection.filePaths);
+    });
+  }
+
+  async loadPublished(input: Readonly<{ sourcePath: string }>) {
+    return this.wrap("LOAD_PUBLISHED", async () => {
+      if (!isAllowedContentPath(input.sourcePath)) {
+        throw new Error("Caminho de conteúdo inválido.");
+      }
+      const entry = (await this.#repository.catalog(true)).find(
+        (candidate) => candidate.sourcePath === input.sourcePath,
+      );
+      if (!entry) throw new Error("Conteúdo não encontrado no catálogo.");
+      const raw = await readFile(
+        resolveConfined(this.#repository.repositoryPath, input.sourcePath),
+        "utf8",
+      );
+      return parsePublishedDraft(
+        raw,
+        entry.type,
+        entry.sourcePath,
+        await this.#repository.currentCommit(),
+      );
+    });
+  }
+
   async saveDraft(draft: LessonDraft) {
     return this.wrap("SAVE_DRAFT", () => saveDraft(this.directories, draft));
   }
@@ -195,7 +231,9 @@ export class AppService implements GearContentStudioApi {
   }
 
   async deletePublished(input: Readonly<{ sourcePath: string }>) {
-    return this.wrap("DELETE_PUBLISHED", () => this.#publisher.deletePublished(input.sourcePath));
+    return this.wrap("DELETE_PUBLISHED", () =>
+      this.#publisher.deletePublished(input.sourcePath),
+    );
   }
 
   private async wrap<T>(event: string, action: () => Promise<T>): Promise<Result<T>> {

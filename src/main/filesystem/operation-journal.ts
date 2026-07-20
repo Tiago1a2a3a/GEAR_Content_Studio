@@ -19,6 +19,12 @@ export type OperationJournal = Readonly<{
       sha256: string;
     }>
   >;
+  modifiedFiles: ReadonlyArray<
+    Readonly<{
+      relativePath: string;
+      backupName: string;
+    }>
+  >;
 }>;
 
 export function journalPath(stagingRoot: string): string {
@@ -37,6 +43,7 @@ export async function createOperationJournal(
     createdAt: new Date().toISOString(),
     state: "review",
     createdFiles: [],
+    modifiedFiles: [],
   };
   await writeJournal(journalPath(stagingRoot), journal);
   return journal;
@@ -58,7 +65,13 @@ export async function readOperationJournal(
       return undefined;
     }
     assertAllowedPaths(parsed.createdFiles.map((file) => file.relativePath));
-    return parsed;
+    if (Array.isArray(parsed.modifiedFiles)) {
+      assertAllowedPaths(parsed.modifiedFiles.map((file) => file.relativePath));
+    }
+    return {
+      ...parsed,
+      modifiedFiles: Array.isArray(parsed.modifiedFiles) ? parsed.modifiedFiles : [],
+    };
   } catch {
     return undefined;
   }
@@ -86,6 +99,22 @@ export async function recordCreatedFile(
   await writeJournal(journalPath(stagingRoot), {
     ...current,
     createdFiles: [...current.createdFiles, { relativePath, sha256 }],
+  });
+}
+
+export async function recordModifiedFile(
+  stagingRoot: string,
+  relativePath: string,
+  backupName: string,
+): Promise<void> {
+  assertAllowedPaths([relativePath]);
+  if (!/^[a-z0-9.-]+$/i.test(backupName)) {
+    throw new Error("Nome de backup inválido.");
+  }
+  const current = await requiredJournal(stagingRoot);
+  await writeJournal(journalPath(stagingRoot), {
+    ...current,
+    modifiedFiles: [...current.modifiedFiles, { relativePath, backupName }],
   });
 }
 

@@ -59,32 +59,32 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 ### MELHORIA-001 — Alterar status da Aula
 
 - **Solicitação:** Permitir mudar o status de uma Aula entre `publicado` e `rascunho`.
-- **Contexto:** O formulário de Nova Aula já permite escolher o status inicial, mas o catálogo existente é somente leitura e não permite alterar uma Aula já criada.
+- **Contexto:** O catálogo agora abre o conteúdo publicado no editor e mantém tipo e slug imutáveis.
 - **Impacto desejado:** facilitar a gestão editorial do ciclo de vida das Aulas.
-- **Status:** sugestão para etapa futura
+- **Status:** implementada na versão 0.2.0; aguardando reteste no instalador
 
 ### MELHORIA-002 — Reordenar blocos por arrastar e soltar
 
 - **Solicitação:** Permitir segurar um bloco do editor e arrastá-lo para outra posição.
 - **Comportamento desejado:** Exibir uma área de destino durante o arraste e atualizar a ordem sem perder o conteúdo do bloco.
-- **Contexto:** Atualmente a ordem pode ser alterada somente pelos controles de mover para cima ou para baixo.
+- **Contexto:** Os controles de subir/descer foram mantidos como alternativa acessível.
 - **Impacto desejado:** tornar a edição de Aulas mais rápida e intuitiva.
-- **Status:** sugestão para etapa futura
+- **Status:** implementada na versão 0.2.0
 
 ## Mudanças de escopo solicitadas
 
 ### ESCOPO-001 — Criar todos os tipos de conteúdo MDX
 
 - **Solicitação:** Permitir criar Aula, Curso, Trilha, Projeto e Notícia pela interface.
-- **Escopo atual:** O MVP publicado permite criar somente Aula.
-- **Status:** aguardando confirmação de ampliação do escopo.
+- **Escopo atual:** Aula, Curso, Trilha, Projeto e Notícia possuem formulários e serialização próprios.
+- **Status:** implementada e coberta por testes automatizados
 
 ### ESCOPO-002 — Excluir conteúdo MDX publicado
 
 - **Solicitação:** Permitir excluir do Git um conteúdo MDX que já foi publicado.
 - **Risco:** a exclusão pode quebrar referências em Cursos, Trilhas ou outros conteúdos.
 - **Regra recomendada:** permitir somente arquivos criados pelo app, exigir duas confirmações e bloquear a exclusão quando houver dependências.
-- **Status:** aguardando confirmação da regra de segurança.
+- **Status:** implementada com registro local de propriedade, duas confirmações, bloqueio por dependências e verificação remota
 
 ### FALHA-003 — Formatação visual ruim nos cards do catálogo
 

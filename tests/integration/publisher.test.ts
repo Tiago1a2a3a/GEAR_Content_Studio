@@ -124,6 +124,31 @@ describe("publicação protegida", () => {
       await readFile(image!.sourcePath),
     );
 
+    const updateDraft: LessonDraft = {
+      ...draft,
+      id: randomUUID(),
+      baseCommit: await repository.currentCommit(),
+      sourcePath: review.mdxRelativePath,
+      titulo: "Aula atualizada pelo app",
+      images: [],
+      body: [
+        {
+          id: randomUUID(),
+          kind: "paragraph",
+          markdown: "Conteúdo atualizado com segurança.",
+        },
+      ],
+    };
+    const updateReview = await publisher.prepareReview(updateDraft);
+    const updateBundle = await publisher.confirmWrite(updateReview.operationId);
+    expect(updateBundle.commitMessage).toContain("atualiza");
+    await publisher.confirmPublish(updateReview.operationId);
+    const updateObserver = path.join(root, "update-observer");
+    await requireGit(root, ["clone", "--branch", "main", remote, updateObserver]);
+    expect(
+      await readFile(path.join(updateObserver, review.mdxRelativePath), "utf8"),
+    ).toContain("Aula atualizada pelo app");
+
     const deleted = await publisher.deletePublished(review.mdxRelativePath);
     expect(deleted.pushedTo).toBe("origin/main");
     const deletionObserver = path.join(root, "deletion-observer");

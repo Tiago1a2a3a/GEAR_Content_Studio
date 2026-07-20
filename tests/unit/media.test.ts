@@ -2,7 +2,7 @@ import path from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { inspectImages } from "../../src/main/filesystem/media";
+import { inspectDownloads, inspectImages } from "../../src/main/filesystem/media";
 
 describe("imagens", () => {
   const fixtures = path.resolve("tests/fixtures/imagens");
@@ -16,5 +16,14 @@ describe("imagens", () => {
     await expect(
       inspectImages([path.join(fixtures, "arquivo-falso.png")]),
     ).rejects.toThrow(/assinatura/);
+  });
+});
+
+describe("downloads", () => {
+  it("normaliza arquivo permitido", async () => {
+    const [download] = await inspectDownloads([
+      path.resolve("tests/fixtures/portal-minimo/public/downloads/guia-exemplo.txt"),
+    ]);
+    expect(download?.normalizedName).toBe("guia-exemplo.txt");
   });
 });
