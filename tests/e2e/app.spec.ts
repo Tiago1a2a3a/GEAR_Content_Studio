@@ -34,6 +34,20 @@ test("atualiza slug ao digitar e preserva rascunho ao navegar", async () => {
   await app.close();
 });
 
+test("não cria rascunho sem título ao visitar Projeto", async () => {
+  const userData = await mkdtemp(path.join(os.tmpdir(), "gear-e2e-empty-draft-"));
+  const app = await electron.launch({
+    executablePath: path.resolve("node_modules/electron/dist/electron.exe"),
+    args: ["out/main/index.js", `--user-data-dir=${userData}`],
+  });
+  const window = await app.firstWindow();
+  await window.getByRole("button", { name: "Criar novo conteúdo" }).click();
+  await window.getByLabel("Tipo de conteúdo").selectOption("projeto");
+  await window.getByRole("button", { name: "Rascunhos", exact: true }).click();
+  await expect(window.getByText("Nenhum rascunho salvo.")).toBeVisible();
+  await app.close();
+});
+
 test("preenche casos GPT numerados para os cinco tipos", async () => {
   const userData = await mkdtemp(path.join(os.tmpdir(), "gear-e2e-gpt-cases-"));
   const app = await electron.launch({

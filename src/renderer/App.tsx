@@ -1420,7 +1420,11 @@ export function App() {
   };
   const updateActiveDraft = useCallback((draft: LessonDraft) => {
     setActiveDraft(draft);
-    setDrafts((current) => [draft, ...current.filter((item) => item.id !== draft.id)]);
+    setDrafts((current) =>
+      draft.titulo.trim()
+        ? [draft, ...current.filter((item) => item.id !== draft.id)]
+        : current.filter((item) => item.id !== draft.id),
+    );
   }, []);
   return (
     <div className="shell">

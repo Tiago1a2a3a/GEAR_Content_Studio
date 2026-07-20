@@ -84,6 +84,10 @@ export async function saveDraft(
   draft: LessonDraft,
 ): Promise<void> {
   const validated = localDraftSchema.parse(draft);
+  if (!validated.titulo.trim()) {
+    await deleteDraft(directories, validated.id);
+    return;
+  }
   await writeJsonAtomic(
     resolveConfined(directories.drafts, `${validated.id}.json`),
     validated,
@@ -108,7 +112,7 @@ export async function listDrafts(directories: AppDirectories): Promise<LessonDra
       .filter((name) => name.endsWith(".json"))
       .map((name) => loadDraft(directories, name.slice(0, -5)).catch(() => undefined)),
   );
-  return drafts.filter((draft): draft is LessonDraft => Boolean(draft));
+  return drafts.filter((draft): draft is LessonDraft => Boolean(draft?.titulo.trim()));
 }
 
 export async function deleteDraft(

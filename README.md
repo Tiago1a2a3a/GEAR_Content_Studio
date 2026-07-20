@@ -10,7 +10,7 @@ confirmações e só exclui conteúdo cuja criação tenha sido registrada pelo 
 
 ## Instalação e uso
 
-O instalador x64 fica em `dist/GEAR Content Studio Setup 0.2.1.exe`. Consulte:
+O instalador x64 fica em `dist/GEAR Content Studio Setup 0.2.2.exe`. Consulte:
 
 - [Instalação e uso](docs/INSTALACAO-E-USO.md)
 - [Segurança e recuperação](docs/SEGURANCA-E-RECUPERACAO.md)
