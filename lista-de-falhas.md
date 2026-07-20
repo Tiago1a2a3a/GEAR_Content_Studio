@@ -111,6 +111,73 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Correção aplicada:** o estado do rascunho é sincronizado com a lista local durante a edição e salvo no ciclo de saída da tela.
 - **Status:** corrigida
 
+### FALHA-007 — Exclusão repetida após conteúdo já removido
+
+- **Título:** Após excluir um conteúdo, ainda é possível tentar excluí-lo novamente.
+- **Data:** 2026-07-20
+- **Etapa/tela:** Catálogo → exclusão de conteúdo publicado.
+- **Como reproduzir:** Excluir um item, confirmar a operação e tentar confirmar a exclusão do mesmo item novamente.
+- **Resultado esperado:** O item deve desaparecer imediatamente do catálogo; uma nova tentativa deve ser bloqueada com mensagem de conteúdo já removido.
+- **Resultado atual:** Observado pelo usuário; registrar para validação durante o próximo teste.
+- **Impacto:** médio
+- **Status:** pendente
+
+### FALHA-008 — Travamento de publicação ao minimizar continua ocorrendo
+
+- **Título:** O app pode travar durante a publicação quando a janela é minimizada.
+- **Data:** 2026-07-20
+- **Etapa/tela:** Nova Aula/Novo conteúdo → Revisar e publicar.
+- **Como reproduzir:** Iniciar a publicação, minimizar a janela e tentar continuar ao retornar.
+- **Resultado esperado:** A operação deve continuar ou apresentar erro recuperável, sem bloquear os campos e botões.
+- **Resultado atual:** O usuário confirmou que o erro continua presente.
+- **Impacto:** crítico
+- **Status:** pendente; reincidência da FALHA-006
+
+### FALHA-009 — Permite republicar conteúdo já publicado como novo
+
+- **Título:** Um conteúdo já publicado pode ser enviado novamente pelo fluxo de criação.
+- **Data:** 2026-07-20
+- **Etapa/tela:** Novo conteúdo → Revisar e publicar.
+- **Como reproduzir:** Publicar um MDX e tentar publicar novamente o mesmo conteúdo ou slug.
+- **Resultado esperado:** O app deve bloquear a duplicidade ou abrir um fluxo explícito de atualização.
+- **Resultado atual:** É possível tentar publicar novamente algo que já foi publicado.
+- **Impacto:** alto
+- **Status:** pendente
+
+### FALHA-010 — Validação fica infinita sem mostrar erro
+
+- **Título:** Erros de preenchimento do MDX não exibem mensagem e deixam a validação carregando indefinidamente.
+- **Data:** 2026-07-20
+- **Etapa/tela:** Novo conteúdo → Revisar e publicar → Gerar MDX e revisar.
+- **Como reproduzir:** Preencher o MDX com dados inválidos e iniciar a validação.
+- **Resultado esperado:** A validação deve terminar e mostrar claramente quais campos estão inválidos.
+- **Resultado atual:** A tela permanece em “Validando…” sem mensagem de erro.
+- **Impacto:** alto
+- **Status:** pendente
+
+### FALHA-011 — Rascunho permanece após publicação
+
+- **Título:** O conteúdo continua listado como rascunho depois de ser publicado.
+- **Data:** 2026-07-20
+- **Etapa/tela:** Publicação → Rascunhos/Catálogo.
+- **Como reproduzir:** Publicar um conteúdo com sucesso e abrir a lista de rascunhos.
+- **Resultado esperado:** O rascunho deve ser removido ou marcado como publicado; o catálogo deve refletir o status publicado.
+- **Resultado atual:** O conteúdo continua aparecendo como rascunho.
+- **Impacto:** alto
+- **Status:** pendente
+
+### FALHA-012 — Tipos diferentes usam composição de Aula
+
+- **Título:** Curso, Trilha, Projeto e Notícia aparecem com a mesma estrutura de composição de Aula.
+- **Data:** 2026-07-20
+- **Etapa/tela:** Novo conteúdo.
+- **Como reproduzir:** Selecionar Curso ou outro tipo e observar o formulário; o Curso não permite cadastrar suas Aulas.
+- **Resultado esperado:** Cada tipo deve seguir seu contrato MDX específico do Portal.
+- **Resultado atual:** O editor reutiliza campos e relações de Aula.
+- **Impacto:** alto
+- **Status:** em correção
+- **Referência:** `tests/fixtures/portal-minimo/content.schemas.ts` e exemplos MDX do Portal.
+
 ## Formato dos registros
 
 Para cada falha, registrar:

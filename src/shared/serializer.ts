@@ -93,15 +93,21 @@ export function serializeLesson(draft: LessonDraft): string {
   if (draft.contentType === "curso") {
     frontmatter.descricao = draft.resumo.trim();
     frontmatter.imagemCapa = banner ? banner.normalizedName : "";
-    frontmatter.aulaSlugs = draft.preRequisitos;
+    frontmatter.aulaSlugs = draft.aulaSlugs ?? [];
+    if (draft.destaque !== undefined) frontmatter.destaque = draft.destaque;
   } else if (draft.contentType === "trilha") {
     frontmatter.descricaoCurta = draft.resumo.trim();
+    if (draft.descricaoLonga?.trim()) frontmatter.descricaoLonga = draft.descricaoLonga.trim();
     frontmatter.imagemCapa = banner ? banner.normalizedName : "";
     frontmatter.area = draft.categoria ?? "geral";
     frontmatter.ordem = 1;
-    frontmatter.itens = draft.preRequisitos;
+    frontmatter.itens = draft.trilhaItens ?? [];
   } else if (draft.contentType === "projeto") {
     frontmatter.descricaoCurta = draft.resumo.trim();
+    if (draft.descricaoLonga?.trim()) frontmatter.descricaoLonga = draft.descricaoLonga.trim();
+    if (draft.tecnologias?.length) frontmatter.tecnologias = draft.tecnologias;
+    if (draft.destaque !== undefined) frontmatter.destaque = draft.destaque;
+    if (draft.documentacao) frontmatter.documentacao = draft.documentacao;
     delete frontmatter.status;
     frontmatter.status = draft.status === "publicado" ? "concluído" : "em andamento";
   } else if (draft.contentType === "noticia") {

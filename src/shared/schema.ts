@@ -90,6 +90,12 @@ export const lessonDraftSchema = z.object({
   images: z.array(pendingImageSchema),
   body: z.array(contentBlockSchema).min(1, "Adicione conteúdo à Aula."),
   contentType: z.enum(["aula", "curso", "trilha", "projeto", "noticia"]).default("aula"),
+  descricaoLonga: z.string().optional(),
+  aulaSlugs: z.array(slugSchema).optional(),
+  trilhaItens: z.array(z.object({ tipo: z.enum(["curso", "aula"]), slug: z.string().min(1) })).optional(),
+  tecnologias: z.array(nonEmpty).optional(),
+  destaque: z.boolean().optional(),
+  documentacao: httpsUrl.optional(),
 });
 
 const localContentBlockSchema = z.discriminatedUnion("kind", [

@@ -43,6 +43,12 @@ export function validateDraft(
       issues.push(issue("INVALID_FIELD", problem.message, problem.path.join(".")));
     }
   }
+  if (draft.contentType === "curso" && !(draft.aulaSlugs?.length)) {
+    issues.push(issue("COURSE_LESSONS_REQUIRED", "O Curso precisa conter ao menos uma Aula.", "aulaSlugs"));
+  }
+  if (draft.contentType === "trilha" && !(draft.trilhaItens?.length)) {
+    issues.push(issue("TRAIL_ITEMS_REQUIRED", "A Trilha precisa conter ao menos um item.", "trilhaItens"));
+  }
   const lessons = catalog.filter((entry) => entry.type === "aula");
   if (lessons.some((entry) => entry.slug === draft.slug)) {
     issues.push(issue("DUPLICATE_SLUG", "Já existe uma Aula com este slug.", "slug"));

@@ -542,6 +542,30 @@ function LessonEditor({
               <option value="projeto">Projeto</option>
             </select>
           </label>
+          {draft.contentType === "curso" && (
+            <label className="wide">
+              Slugs das aulas, separados por vírgula
+              <input value={(draft.aulaSlugs ?? []).join(", ")} onChange={(event) => set("aulaSlugs", event.target.value.split(",").map((value) => value.trim()).filter(Boolean))} />
+            </label>
+          )}
+          {draft.contentType === "trilha" && (
+            <label className="wide">
+              Itens da trilha, no formato tipo:slug, separados por vírgula
+              <input value={(draft.trilhaItens ?? []).map((item) => `${item.tipo}:${item.slug}`).join(", ")} onChange={(event) => set("trilhaItens", event.target.value.split(",").map((value) => { const [tipo, ...slug] = value.trim().split(":"); return { tipo: (tipo === "curso" ? "curso" : "aula") as "curso" | "aula", slug: slug.join(":").trim() }; }).filter((item) => item.slug))} />
+            </label>
+          )}
+          {(draft.contentType === "trilha" || draft.contentType === "projeto") && (
+            <label className="wide">
+              Descrição longa, opcional
+              <textarea value={draft.descricaoLonga ?? ""} onChange={(event) => set("descricaoLonga", event.target.value)} />
+            </label>
+          )}
+          {draft.contentType === "projeto" && (
+            <label>
+              Tecnologias, separadas por vírgula
+              <input value={(draft.tecnologias ?? []).join(", ")} onChange={(event) => set("tecnologias", event.target.value.split(",").map((value) => value.trim()).filter(Boolean))} />
+            </label>
+          )}
           <label className="wide">
             Título
             <input

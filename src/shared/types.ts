@@ -56,6 +56,12 @@ export type LessonDraft = Readonly<{
   images: PendingImage[];
   body: ContentBlock[];
   contentType?: ContentType;
+  descricaoLonga?: string;
+  aulaSlugs?: string[];
+  trilhaItens?: Array<Readonly<{ tipo: "curso" | "aula"; slug: string }>>;
+  tecnologias?: string[];
+  destaque?: boolean;
+  documentacao?: string;
 }>;
 
 export type CatalogEntry = Readonly<{
