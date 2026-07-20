@@ -4,6 +4,7 @@ exports[`serializer MDX > é determinístico e respeita a ordem do frontmatter 1
 "---
 slug: aula-segura
 titulo: "Aula: segura"
+banner: /images/content/capa-padrao-branca.svg
 resumo: Resumo válido
 tags:
   - git

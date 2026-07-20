@@ -4,6 +4,7 @@ import matter from "gray-matter";
 import { describe, expect, it } from "vitest";
 
 import { serializeLesson } from "../../src/shared/serializer";
+import { DEFAULT_COVER_PATH } from "../../src/shared/content-defaults";
 import type { ContentType, LessonDraft } from "../../src/shared/types";
 
 const image = {
@@ -84,4 +85,19 @@ describe("contratos MDX por tipo", () => {
     }
     expect(parsed.content).toContain("## Teste completo");
   });
+
+  it.each(["aula", "curso", "trilha", "noticia"] as const)(
+    "usa capa pública padrão quando %s não recebe imagem",
+    (type) => {
+      const original = gptDraft(type);
+      const value: LessonDraft = {
+        ...original,
+        images: [],
+        bannerImageId: undefined,
+        body: original.body.filter((block) => block.kind !== "image"),
+      };
+      const data = matter(serializeLesson(value)).data;
+      expect(type === "aula" ? data.banner : data.imagemCapa).toBe(DEFAULT_COVER_PATH);
+    },
+  );
 });

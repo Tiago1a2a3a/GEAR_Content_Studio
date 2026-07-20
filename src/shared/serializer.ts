@@ -1,6 +1,7 @@
 import { stringify } from "yaml";
 
 import type { ContentBlock, LessonDraft } from "./types";
+import { DEFAULT_COVER_PATH } from "./content-defaults";
 
 const contentDirectories = {
   aula: "aulas",
@@ -84,13 +85,13 @@ function serializeFrontmatter(draft: LessonDraft): Record<string, unknown> {
   const base = { slug: draft.slug, titulo: draft.titulo.trim() };
   const cover = banner
     ? publicImagePath(draft, banner.normalizedName)
-    : (draft.existingBannerPath ?? "");
+    : (draft.existingBannerPath ?? DEFAULT_COVER_PATH);
   const tags = draft.tags.map((value) => value.trim());
 
   if (type === "aula") {
     return {
       ...base,
-      ...(cover ? { banner: cover } : {}),
+      banner: cover,
       resumo: draft.resumo.trim(),
       ...(tags.length ? { tags } : {}),
       ...(draft.categoria?.trim() ? { categoria: draft.categoria.trim() } : {}),

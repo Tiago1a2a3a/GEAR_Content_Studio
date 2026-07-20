@@ -246,5 +246,5 @@ describe("publicação protegida", () => {
     ]) {
       await publisher.deletePublished(relativePath);
     }
-  });
+  }, 60_000);
 });

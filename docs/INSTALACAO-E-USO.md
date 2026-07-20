@@ -15,7 +15,7 @@ gate adicional.
 
 ## Instalar
 
-1. Execute `GEAR Content Studio Setup 0.2.0.exe`.
+1. Execute `GEAR Content Studio Setup 0.2.1.exe`.
 2. Escolha a pasta de instalação.
 3. Abra **GEAR Content Studio** pelo menu Iniciar ou atalho.
 4. Em **Configurações**, confirme o remoto fixo
@@ -33,6 +33,8 @@ O clone exclusivo, rascunhos, staging e logs ficam em:
 1. Selecione **Novo conteúdo** e escolha Aula, Curso, Trilha, Projeto ou Notícia.
 2. Preencha os metadados e recursos próprios do tipo escolhido. Aulas também
    aceitam downloads PDF, TXT e ZIP de até 25 MiB.
+   Se nenhuma capa for escolhida, o app usa automaticamente a capa branca
+   pública do Portal; ela pode ser substituída por uma imagem selecionada.
 3. Revise o preview estrutural e o MDX gerado.
 4. Confirme a primeira ação para escrever e validar no clone.
 5. Revise os caminhos, o diff staged e a mensagem de commit.

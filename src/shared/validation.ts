@@ -80,19 +80,6 @@ export function validateDraft(
       ),
     );
   }
-  if (
-    ["curso", "trilha", "noticia"].includes(type) &&
-    !draft.bannerImageId &&
-    !draft.existingBannerPath
-  ) {
-    issues.push(
-      issue(
-        "COVER_REQUIRED",
-        "Selecione uma imagem de capa para este tipo de conteúdo.",
-        "bannerImageId",
-      ),
-    );
-  }
   if (["aula", "noticia"].includes(type) && !draft.autores.length) {
     issues.push(
       issue(

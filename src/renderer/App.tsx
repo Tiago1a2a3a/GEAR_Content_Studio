@@ -9,6 +9,7 @@ import type {
 } from "../shared/types";
 import { toSlug } from "../shared/slug";
 import { EXPECTED_REMOTE_URL } from "../shared/schema";
+import { DEFAULT_COVER_PATH } from "../shared/content-defaults";
 
 const randomUUID = () => crypto.randomUUID();
 
@@ -1251,10 +1252,16 @@ function LessonEditor({
                 </li>
               ))}
             </ul>
+            {draft.contentType !== "projeto" && (
+              <p className="hint">
+                Sem uma imagem escolhida, será usada automaticamente a capa branca
+                pública <code>{DEFAULT_COVER_PATH}</code>.
+              </p>
+            )}
             {draft.images.length > 0 && (
               <label>
                 {["curso", "trilha", "noticia"].includes(draft.contentType ?? "aula")
-                  ? "Imagem de capa obrigatória"
+                  ? "Imagem de capa"
                   : draft.contentType === "projeto"
                     ? "Imagem principal"
                     : "Banner opcional"}
@@ -1264,7 +1271,7 @@ function LessonEditor({
                     set("bannerImageId", event.target.value || undefined)
                   }
                 >
-                  <option value="">Selecione uma imagem</option>
+                  <option value="">Usar capa branca padrão</option>
                   {draft.images.map((image) => (
                     <option key={image.id} value={image.id}>
                       {image.normalizedName}
