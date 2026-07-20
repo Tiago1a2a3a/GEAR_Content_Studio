@@ -1389,6 +1389,12 @@ export function App() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
+  useEffect(() => {
+    if (!error) return;
+    const timeout = window.setTimeout(() => setError(""), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [error]);
+
   const refresh = async () => {
     const [environmentResult, catalogResult, draftsResult] = await Promise.all([
       window.gearContentStudio.environmentCheck(),
