@@ -1,0 +1,10 @@
+{
+  "01-titulo-ausente.mdx": "required-field",
+  "02-slug-invalido.mdx": "invalid-slug",
+  "03-url-http.mdx": "https-required",
+  "04-imagem-inexistente.mdx": "public-file-missing",
+  "05-prerequisito-inexistente.mdx": "reference-missing",
+  "06-corpo-com-jsx.mdx": "unsafe-mdx",
+  "07-imagem-sem-alt.mdx": "image-alt-required",
+  "08-path-traversal.mdx": "path-escape"
+}

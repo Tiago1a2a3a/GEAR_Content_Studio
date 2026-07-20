@@ -1,0 +1,29 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`serializer MDX > é determinístico e respeita a ordem do frontmatter 1`] = `
+"---
+slug: aula-segura
+titulo: "Aula: segura"
+resumo: Resumo válido
+tags:
+  - git
+  - segurança
+dificuldade: iniciante
+dataPublicacao: 2026-07-20
+autores:
+  - Equipe GEAR
+videos:
+  - https://example.com/video
+status: rascunho
+permiteComentarios: false
+---
+
+## Objetivos
+
+Texto **seguro**.
+
+\`\`\`ts
+const ok = true;
+\`\`\`
+"
+`;

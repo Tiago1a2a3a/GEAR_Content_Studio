@@ -1,0 +1,172 @@
+{
+  "contractVersion": 1,
+  "root": "src/content",
+  "publicRoot": "public",
+  "slugPattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+  "datePattern": "^\\d{4}-\\d{2}-\\d{2}$",
+  "externalProtocol": "https:",
+  "collections": {
+    "aula": {
+      "glob": "src/content/aprendizado/aulas/*.mdx",
+      "filename": "<slug>.mdx",
+      "mvpMode": "create",
+      "required": [
+        "slug",
+        "titulo",
+        "resumo",
+        "dificuldade",
+        "dataPublicacao",
+        "autores",
+        "status"
+      ],
+      "optional": [
+        "banner",
+        "tags",
+        "categoria",
+        "dataAtualizacao",
+        "preRequisitos",
+        "videos",
+        "linksExternos",
+        "downloads",
+        "repositorioGithub",
+        "permiteComentarios"
+      ],
+      "defaults": {
+        "status": "rascunho",
+        "permiteComentarios": false
+      },
+      "enums": {
+        "dificuldade": ["iniciante", "intermediário", "avançado"],
+        "status": ["rascunho", "publicado"]
+      },
+      "relations": {
+        "preRequisitos": {
+          "target": "aula",
+          "publishedTargetRequired": false,
+          "cyclesAllowed": false
+        }
+      }
+    },
+    "curso": {
+      "glob": "src/content/aprendizado/cursos/*.mdx",
+      "mvpMode": "read",
+      "required": [
+        "slug",
+        "titulo",
+        "descricao",
+        "imagemCapa",
+        "dificuldade",
+        "aulaSlugs",
+        "status"
+      ],
+      "optional": [
+        "dataPublicacao",
+        "destaque",
+        "categoria",
+        "tags",
+        "preRequisitos"
+      ],
+      "enums": {
+        "dificuldade": ["iniciante", "intermediário", "avançado"],
+        "status": ["rascunho", "publicado"]
+      }
+    },
+    "trilha": {
+      "glob": "src/content/aprendizado/trilhas/*.mdx",
+      "mvpMode": "read",
+      "required": [
+        "slug",
+        "titulo",
+        "descricaoCurta",
+        "imagemCapa",
+        "area",
+        "ordem",
+        "itens",
+        "status"
+      ],
+      "optional": ["descricaoLonga", "dataPublicacao"],
+      "enums": {
+        "status": ["rascunho", "publicado"]
+      }
+    },
+    "projeto": {
+      "glob": "src/content/projetos/*.mdx",
+      "mvpMode": "read",
+      "required": ["slug", "titulo", "descricaoCurta", "status"],
+      "optional": [
+        "descricaoLonga",
+        "imagens",
+        "videos",
+        "tecnologias",
+        "repositorioGithub",
+        "documentacao",
+        "destaque"
+      ],
+      "enums": {
+        "status": ["em andamento", "concluído"]
+      }
+    },
+    "noticia": {
+      "glob": "src/content/noticias/*.mdx",
+      "mvpMode": "read",
+      "required": [
+        "slug",
+        "titulo",
+        "imagemCapa",
+        "resumo",
+        "dataPublicacao",
+        "autor",
+        "status"
+      ],
+      "optional": ["categoria", "tags"],
+      "enums": {
+        "status": ["rascunho", "publicado"]
+      }
+    }
+  },
+  "mvpWriteAllowlist": [
+    {
+      "kind": "mdx",
+      "pattern": "^src/content/aprendizado/aulas/[a-z0-9]+(?:-[a-z0-9]+)*\\.mdx$"
+    },
+    {
+      "kind": "image",
+      "pattern": "^public/images/content/aulas/[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*\\.(png|jpg|jpeg|webp)$"
+    }
+  ],
+  "forbiddenMdxPatterns": [
+    "^\\s*import\\s",
+    "^\\s*export\\s",
+    "<[A-Z][A-Za-z0-9.]*",
+    "<script\\b",
+    "javascript:"
+  ],
+  "bodyBlocks": [
+    "paragraph",
+    "heading",
+    "unordered-list",
+    "ordered-list",
+    "image",
+    "code",
+    "quote",
+    "separator"
+  ],
+  "lessonFrontmatterOrder": [
+    "slug",
+    "titulo",
+    "banner",
+    "resumo",
+    "tags",
+    "categoria",
+    "dificuldade",
+    "dataPublicacao",
+    "dataAtualizacao",
+    "autores",
+    "preRequisitos",
+    "videos",
+    "linksExternos",
+    "repositorioGithub",
+    "status",
+    "permiteComentarios"
+  ]
+}

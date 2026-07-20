@@ -1,0 +1,79 @@
+{
+  "contractVersion": 1,
+  "remoteName": "origin",
+  "branch": "main",
+  "commands": {
+    "version": ["git", "--version"],
+    "clone": [
+      "git",
+      "clone",
+      "--origin",
+      "origin",
+      "--branch",
+      "main",
+      "--single-branch",
+      "<remoteUrl>",
+      "<repositoryPath>"
+    ],
+    "originUrl": ["git", "remote", "get-url", "origin"],
+    "fetch": ["git", "fetch", "--prune", "origin", "main"],
+    "head": ["git", "rev-parse", "HEAD"],
+    "remoteHead": ["git", "rev-parse", "origin/main"],
+    "statusPorcelain": [
+      "git",
+      "status",
+      "--porcelain=v1",
+      "-z",
+      "--untracked-files=all"
+    ],
+    "fastForward": ["git", "merge", "--ff-only", "origin/main"],
+    "workingDiff": ["git", "diff", "--", "<exactAllowedPaths...>"],
+    "stage": ["git", "add", "--", "<exactAllowedPaths...>"],
+    "stagedNames": ["git", "diff", "--cached", "--name-only", "-z"],
+    "stagedDiff": ["git", "diff", "--cached", "--", "<exactAllowedPaths...>"],
+    "commit": ["git", "commit", "-m", "content(aula): adiciona <slug>"],
+    "push": ["git", "push", "origin", "HEAD:main"]
+  },
+  "execution": {
+    "shell": false,
+    "cwd": "managedRepository",
+    "timeoutMs": 120000,
+    "maxOutputBytes": 1048576,
+    "oneMutableOperationAtATime": true
+  },
+  "preWriteGuards": [
+    "contract-lock-matches",
+    "working-tree-clean",
+    "head-equals-base-commit",
+    "origin-main-equals-base-commit",
+    "slug-does-not-exist",
+    "destinations-do-not-exist",
+    "draft-valid"
+  ],
+  "preCommitGuards": [
+    "portal-validation-passed",
+    "working-diff-only-allowlist",
+    "user-confirmed-files-and-write"
+  ],
+  "prePushGuards": [
+    "staged-diff-only-allowlist",
+    "user-confirmed-diff-and-message",
+    "remote-rechecked-after-commit",
+    "no-conflict"
+  ],
+  "forbidden": [
+    "git push --force",
+    "git reset --hard",
+    "git clean",
+    "git checkout --",
+    "git restore",
+    "git stash",
+    "automatic-conflict-resolution",
+    "shell-command-string"
+  ],
+  "successCondition": {
+    "command": "push",
+    "exitCode": 0,
+    "remoteRefConfirmed": "main"
+  }
+}

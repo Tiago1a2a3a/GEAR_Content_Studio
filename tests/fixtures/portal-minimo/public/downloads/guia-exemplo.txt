@@ -1,0 +1,3 @@
+Material demonstrativo do pipeline editorial do GEAR.
+
+Substitua este arquivo por um recurso revisado antes da publicação definitiva.

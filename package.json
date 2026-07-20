@@ -1,0 +1,90 @@
+{
+  "name": "gear-content-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Editor local de conteúdo MDX do Portal GEAR",
+  "main": "out/main/index.js",
+  "engines": {
+    "node": "24.x",
+    "npm": "11.x"
+  },
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "npm run typecheck && npm test && electron-vite build",
+    "dist:win": "npm run build && electron-builder --win nsis --x64",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "test:all": "vitest run"
+  },
+  "dependencies": {
+    "gray-matter": "4.0.3",
+    "image-size": "2.0.2",
+    "minisearch": "7.2.0",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.61.1",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/react": "16.3.2",
+    "@types/node": "26.1.1",
+    "@types/react": "19.2.17",
+    "@types/react-dom": "19.2.3",
+    "@vitejs/plugin-react": "5.2.0",
+    "electron": "43.1.1",
+    "electron-builder": "26.15.3",
+    "electron-vite": "5.0.0",
+    "eslint": "10.7.0",
+    "jsdom": "29.1.1",
+    "prettier": "3.9.5",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.64.0",
+    "vite": "7.3.6",
+    "vitest": "4.1.10"
+  },
+  "build": {
+    "appId": "br.ufmg.gear.contentstudio",
+    "productName": "GEAR Content Studio",
+    "asar": true,
+    "files": [
+      "out/**/*",
+      "resources/contracts/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/contracts",
+        "to": "contracts"
+      },
+      {
+        "from": "docs",
+        "to": "docs"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}

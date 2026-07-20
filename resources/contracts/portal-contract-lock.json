@@ -1,0 +1,16 @@
+{
+  "lockVersion": 1,
+  "portalCommit": "e98921546f3ae4f33f35b7a6217fe700e87ca2b7",
+  "files": {
+    "content.schemas.ts": {
+      "sha256": "0c09af7693ac06ad2826b641013f276fda520df12b41c89fb94dc8730d399f93"
+    },
+    "content.validation.ts": {
+      "sha256": "be77d7053be2f1cee2fb66f873a23f8d253c7ce8c7c15b16d5bc890356316a0b"
+    },
+    "velite.config.mts": {
+      "sha256": "ec51daee3e1f2b7b4338980d5f336f9fc184ab5c3160fbebb59cd729aa68c53f"
+    }
+  },
+  "onMismatch": "read-only"
+}

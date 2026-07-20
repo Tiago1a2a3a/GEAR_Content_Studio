@@ -1,0 +1,44 @@
+# GEAR Content Studio
+
+Aplicativo desktop local para consultar o conteúdo do Portal GEAR e criar novas
+Aulas em MDX com validação, preview, diff e publicação Git segura.
+
+O MVP não incorpora IA generativa. Ele opera somente sobre o clone gerenciado do
+repositório aprovado `https://github.com/Tiago1a2a3a/Site_Gear`, cria Aulas e
+imagens novas e publica em `origin/main` após duas confirmações.
+
+## Instalação e uso
+
+O instalador x64 fica em `dist/GEAR Content Studio Setup 0.1.0.exe`. Consulte:
+
+- [Instalação e uso](docs/INSTALACAO-E-USO.md)
+- [Segurança e recuperação](docs/SEGURANCA-E-RECUPERACAO.md)
+- [Normalização dos hashes de contrato](docs/ADR-001-HASHES-LF.md)
+
+## Desenvolvimento
+
+Requer Windows, Node.js 24, npm 11 e Git configurado.
+
+```powershell
+npm install
+npm run dev
+```
+
+## Validação
+
+```powershell
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+npm run test:integration
+npm run test:e2e
+npm run build
+npm run dist:win
+```
+
+O aplicativo mantém seu clone em `%LOCALAPPDATA%\GEAR Content Studio\repository`.
+Ele nunca usa um clone cotidiano e nunca armazena credenciais.
+
+`graphify-out/` contém o grafo estrutural local usado para auditar arquitetura e
+relações do código. Ele não faz parte do instalador.

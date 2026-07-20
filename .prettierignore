@@ -1,0 +1,8 @@
+resources/contracts/
+tests/fixtures/
+out/
+dist/
+coverage/
+playwright-report/
+test-results/
+graphify-out/
