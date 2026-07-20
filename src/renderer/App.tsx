@@ -1469,13 +1469,21 @@ export function App() {
             {notice}
             <button
               type="button"
-              onClick={() =>
+              onClick={() => {
+                setNotice("");
                 void window.gearContentStudio.openExternalHttps(
                   "https://github.com/Tiago1a2a3a/Site_Gear/actions",
-                )
-              }
+                );
+              }}
             >
               Ver deploy no GitHub
+            </button>
+            <button
+              type="button"
+              aria-label="Fechar aviso"
+              onClick={() => setNotice("")}
+            >
+              ×
             </button>
           </div>
         )}
