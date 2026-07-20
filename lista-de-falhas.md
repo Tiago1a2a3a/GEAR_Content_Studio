@@ -120,7 +120,8 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Resultado esperado:** O item deve desaparecer imediatamente do catálogo; uma nova tentativa deve ser bloqueada com mensagem de conteúdo já removido.
 - **Resultado atual:** Observado pelo usuário; registrar para validação durante o próximo teste.
 - **Impacto:** médio
-- **Status:** pendente
+- **Correção aplicada:** o item é removido imediatamente do estado do catálogo, a seleção é limpa e o cache é recarregado após a confirmação remota.
+- **Status:** corrigida; aguardando reteste no instalador
 
 ### FALHA-008 — Travamento de publicação ao minimizar continua ocorrendo
 
@@ -131,7 +132,8 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Resultado esperado:** A operação deve continuar ou apresentar erro recuperável, sem bloquear os campos e botões.
 - **Resultado atual:** O usuário confirmou que o erro continua presente.
 - **Impacto:** crítico
-- **Status:** pendente; reincidência da FALHA-006
+- **Correção aplicada:** todas as chamadas de validação, escrita e publicação agora encerram o estado ocupado em `finally`, inclusive quando o IPC rejeita a promessa.
+- **Status:** corrigida; aguardando reteste ao minimizar
 
 ### FALHA-009 — Permite republicar conteúdo já publicado como novo
 
@@ -142,7 +144,8 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Resultado esperado:** O app deve bloquear a duplicidade ou abrir um fluxo explícito de atualização.
 - **Resultado atual:** É possível tentar publicar novamente algo que já foi publicado.
 - **Impacto:** alto
-- **Status:** pendente
+- **Correção aplicada:** slugs existentes são bloqueados por tipo, a revisão é invalidada ao editar e o editor fecha após uma publicação concluída.
+- **Status:** corrigida; aguardando reteste no instalador
 
 ### FALHA-010 — Validação fica infinita sem mostrar erro
 
@@ -153,7 +156,8 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Resultado esperado:** A validação deve terminar e mostrar claramente quais campos estão inválidos.
 - **Resultado atual:** A tela permanece em “Validando…” sem mensagem de erro.
 - **Impacto:** alto
-- **Status:** pendente
+- **Correção aplicada:** rejeições do IPC são capturadas, exibidas na tela e o indicador “Validando…” sempre é encerrado.
+- **Status:** corrigida; coberta por verificação de compilação e aguardando reteste visual
 
 ### FALHA-011 — Rascunho permanece após publicação
 
@@ -164,7 +168,8 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Resultado esperado:** O rascunho deve ser removido ou marcado como publicado; o catálogo deve refletir o status publicado.
 - **Resultado atual:** O conteúdo continua aparecendo como rascunho.
 - **Impacto:** alto
-- **Status:** pendente
+- **Correção aplicada:** o autosave é desativado antes de desmontar o editor publicado, o rascunho sai do estado local e a tela volta ao catálogo.
+- **Status:** corrigida; aguardando reteste no instalador
 
 ### FALHA-012 — Tipos diferentes usam composição de Aula
 
@@ -175,8 +180,21 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Resultado esperado:** Cada tipo deve seguir seu contrato MDX específico do Portal.
 - **Resultado atual:** O editor reutiliza campos e relações de Aula.
 - **Impacto:** alto
-- **Status:** em correção
+- **Correção aplicada:** cada tipo possui campos condicionais, relações e frontmatter próprios; Curso seleciona Aulas e Trilha seleciona Aulas/Cursos.
+- **Status:** corrigida; 5 contratos cobertos por testes automatizados
 - **Referência:** `tests/fixtures/portal-minimo/content.schemas.ts` e exemplos MDX do Portal.
+
+### FALHA-013 — Exclusão no app não remove conteúdo do site
+
+- **Título:** O conteúdo desaparece ou é excluído no app, mas continua disponível no Portal/site.
+- **Data:** 2026-07-20
+- **Etapa/tela:** Catálogo → excluir conteúdo publicado.
+- **Como reproduzir:** Excluir um conteúdo pelo app, confirmar as duas etapas e abrir o Portal/site.
+- **Resultado esperado:** O MDX deve ser removido do repositório remoto e deixar de aparecer no site após o deploy.
+- **Resultado atual:** O app aparenta concluir a exclusão, mas o conteúdo continua no site.
+- **Impacto:** crítico
+- **Correção aplicada:** após o push, o app busca `origin/main`, confirma o SHA remoto e verifica que o caminho não existe mais no commit remoto. O deploy do site continua externo ao app.
+- **Status:** Git corrigido e coberto por integração; aguardando reteste do deploy do Portal.
 
 ## Formato dos registros
 

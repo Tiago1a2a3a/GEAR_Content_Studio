@@ -80,7 +80,7 @@ export const lessonDraftSchema = z.object({
   dificuldade: z.enum(["iniciante", "intermediário", "avançado"]),
   dataPublicacao: dateSchema,
   dataAtualizacao: dateSchema.optional(),
-  autores: z.array(nonEmpty).min(1, "Informe ao menos um autor."),
+  autores: z.array(nonEmpty),
   preRequisitos: z.array(slugSchema),
   videos: z.array(httpsUrl),
   linksExternos: z.array(z.object({ titulo: nonEmpty, url: httpsUrl })),
@@ -89,13 +89,18 @@ export const lessonDraftSchema = z.object({
   permiteComentarios: z.boolean(),
   images: z.array(pendingImageSchema),
   body: z.array(contentBlockSchema).min(1, "Adicione conteúdo à Aula."),
-  contentType: z.enum(["aula", "curso", "trilha", "projeto", "noticia"]).default("aula"),
+  contentType: z
+    .enum(["aula", "curso", "trilha", "projeto", "noticia"])
+    .default("aula"),
   descricaoLonga: z.string().optional(),
   aulaSlugs: z.array(slugSchema).optional(),
-  trilhaItens: z.array(z.object({ tipo: z.enum(["curso", "aula"]), slug: z.string().min(1) })).optional(),
+  trilhaItens: z
+    .array(z.object({ tipo: z.enum(["curso", "aula"]), slug: z.string().min(1) }))
+    .optional(),
   tecnologias: z.array(nonEmpty).optional(),
   destaque: z.boolean().optional(),
   documentacao: httpsUrl.optional(),
+  ordem: z.number().int().nonnegative().optional(),
 });
 
 const localContentBlockSchema = z.discriminatedUnion("kind", [

@@ -49,7 +49,7 @@
     },
     "curso": {
       "glob": "src/content/aprendizado/cursos/*.mdx",
-      "mvpMode": "read",
+      "mvpMode": "create",
       "required": [
         "slug",
         "titulo",
@@ -73,7 +73,7 @@
     },
     "trilha": {
       "glob": "src/content/aprendizado/trilhas/*.mdx",
-      "mvpMode": "read",
+      "mvpMode": "create",
       "required": [
         "slug",
         "titulo",
@@ -91,7 +91,7 @@
     },
     "projeto": {
       "glob": "src/content/projetos/*.mdx",
-      "mvpMode": "read",
+      "mvpMode": "create",
       "required": ["slug", "titulo", "descricaoCurta", "status"],
       "optional": [
         "descricaoLonga",
@@ -108,7 +108,7 @@
     },
     "noticia": {
       "glob": "src/content/noticias/*.mdx",
-      "mvpMode": "read",
+      "mvpMode": "create",
       "required": [
         "slug",
         "titulo",
@@ -132,6 +132,14 @@
     {
       "kind": "image",
       "pattern": "^public/images/content/aulas/[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*\\.(png|jpg|jpeg|webp)$"
+    },
+    {
+      "kind": "mdx",
+      "pattern": "^src/content/(aprendizado/(cursos|trilhas)|projetos|noticias)/[a-z0-9]+(?:-[a-z0-9]+)*\\.mdx$"
+    },
+    {
+      "kind": "image",
+      "pattern": "^public/images/content/(aprendizado/(cursos|trilhas)|projetos|noticias)/[a-z0-9]+(?:-[a-z0-9]+)*/[a-z0-9]+(?:-[a-z0-9]+)*\\.(png|jpg|jpeg|webp)$"
     }
   ],
   "forbiddenMdxPatterns": [

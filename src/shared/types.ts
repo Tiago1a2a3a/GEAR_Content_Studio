@@ -62,6 +62,7 @@ export type LessonDraft = Readonly<{
   tecnologias?: string[];
   destaque?: boolean;
   documentacao?: string;
+  ordem?: number;
 }>;
 
 export type CatalogEntry = Readonly<{
@@ -140,7 +141,9 @@ export type GearContentStudioApi = Readonly<{
   cancelOperation(operationId: string): Promise<Result<void>>;
   openExternalHttps(url: string): Promise<Result<void>>;
   copyDiagnostic(detailsId: string): Promise<Result<string>>;
-  deletePublished(input: Readonly<{ sourcePath: string }>): Promise<Result<Readonly<{ commit: string; pushedTo: "origin/main" }>>>;
+  deletePublished(
+    input: Readonly<{ sourcePath: string }>,
+  ): Promise<Result<Readonly<{ commit: string; pushedTo: "origin/main" }>>>;
 }>;
 
 export const ok = <T>(value: T): Result<T> => ({ ok: true, value });

@@ -4,7 +4,11 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import portalLockJson from "../../../resources/contracts/portal-contract-lock.json";
-import { assertAllowedPaths, isAllowedContentPath, resolveConfinedForWrite } from "../../shared/paths";
+import {
+  assertAllowedPaths,
+  isAllowedContentPath,
+  resolveConfinedForWrite,
+} from "../../shared/paths";
 import { serializeLesson } from "../../shared/serializer";
 import type {
   LessonDraft,
@@ -23,7 +27,7 @@ import {
   type OperationJournalState,
 } from "../filesystem/operation-journal";
 import { deleteDraft, type AppDirectories } from "../filesystem/storage";
-import { requireGit } from "../git/runner";
+import { requireGit, runGit } from "../git/runner";
 import { verifyPortalContract, type PortalContractLock } from "../validation/contract";
 import { ManagedRepository } from "./repository";
 
@@ -53,20 +57,59 @@ export class Publisher {
     this.#lock = new OperationLock(directories.operationLock);
   }
 
-  async deletePublished(sourcePath: string): Promise<Readonly<{ commit: string; pushedTo: "origin/main" }>> {
-    if (!isAllowedContentPath(sourcePath)) throw new Error("Só é permitido excluir um MDX de conteúdo do Portal.");
+  async deletePublished(
+    sourcePath: string,
+  ): Promise<Readonly<{ commit: string; pushedTo: "origin/main" }>> {
+    if (!isAllowedContentPath(sourcePath))
+      throw new Error("Só é permitido excluir um MDX de conteúdo do Portal.");
     await this.repository.ensureClean();
-    await requireGit(this.repository.repositoryPath, ["fetch", "--prune", "origin", "main"]);
-    const entry = (await this.repository.catalog(true)).find((item) => item.sourcePath === sourcePath);
+    await requireGit(this.repository.repositoryPath, [
+      "fetch",
+      "--prune",
+      "origin",
+      "main",
+    ]);
+    if (
+      (await this.repository.currentCommit()) !== (await this.repository.remoteCommit())
+    ) {
+      throw new Error("A main local está desatualizada. Sincronize antes de excluir.");
+    }
+    const entry = (await this.repository.catalog(true)).find(
+      (item) => item.sourcePath === sourcePath,
+    );
     if (!entry) throw new Error("Conteúdo não encontrado no catálogo.");
-    if (entry.incomingRelations.length) throw new Error(`Exclusão bloqueada: este conteúdo é usado por ${entry.incomingRelations.join(", ")}.`);
-    const target = await resolveConfinedForWrite(this.repository.repositoryPath, sourcePath);
+    if (entry.incomingRelations.length)
+      throw new Error(
+        `Exclusão bloqueada: este conteúdo é usado por ${entry.incomingRelations.join(", ")}.`,
+      );
+    const target = await resolveConfinedForWrite(
+      this.repository.repositoryPath,
+      sourcePath,
+    );
     await rm(target, { force: false });
     await requireGit(this.repository.repositoryPath, ["add", "--", sourcePath]);
     const commitMessage = `content(${entry.type}): remove ${entry.slug}`;
     await requireGit(this.repository.repositoryPath, ["commit", "-m", commitMessage]);
     await requireGit(this.repository.repositoryPath, ["push", "origin", "HEAD:main"]);
     const commit = await this.repository.currentCommit();
+    await requireGit(this.repository.repositoryPath, [
+      "fetch",
+      "--prune",
+      "origin",
+      "main",
+    ]);
+    if ((await this.repository.remoteCommit()) !== commit) {
+      throw new Error("O push da exclusão não foi confirmado em origin/main.");
+    }
+    const remoteFile = await runGit(this.repository.repositoryPath, [
+      "cat-file",
+      "-e",
+      `origin/main:${sourcePath}`,
+    ]);
+    if (remoteFile.exitCode === 0) {
+      throw new Error("O arquivo ainda existe em origin/main após o push.");
+    }
+    await this.repository.catalog(true);
     return { commit, pushedTo: "origin/main" };
   }
 
@@ -94,11 +137,21 @@ export class Publisher {
     await this.#lock.acquire(operationId);
     try {
       const stagingRoot = path.join(this.directories.staging, operationId);
-      const directories = { aula: "aprendizado/aulas", curso: "aprendizado/cursos", trilha: "aprendizado/trilhas", projeto: "projetos", noticia: "noticias" } as const;
+      const directories = {
+        aula: "aprendizado/aulas",
+        curso: "aprendizado/cursos",
+        trilha: "aprendizado/trilhas",
+        projeto: "projetos",
+        noticia: "noticias",
+      } as const;
       const mdxRelativePath = `src/content/${directories[draft.contentType ?? "aula"]}/${draft.slug}.mdx`;
-      const imageDirectory = draft.contentType === "aula" || !draft.contentType ? "aulas" : directories[draft.contentType];
+      const imageDirectory =
+        draft.contentType === "aula" || !draft.contentType
+          ? "aulas"
+          : directories[draft.contentType];
       const imageRelativePaths = draft.images.map(
-        (image) => `public/images/content/${imageDirectory}/${draft.slug}/${image.normalizedName}`,
+        (image) =>
+          `public/images/content/${imageDirectory}/${draft.slug}/${image.normalizedName}`,
       );
       const relativePaths = [mdxRelativePath, ...imageRelativePaths];
       assertAllowedPaths(relativePaths);
@@ -196,7 +249,13 @@ export class Publisher {
         mdxRelativePath,
       );
       for (const image of operation.draft.images) {
-        const directories = { aula: "aulas", curso: "aprendizado/cursos", trilha: "aprendizado/trilhas", projeto: "projetos", noticia: "noticias" } as const;
+        const directories = {
+          aula: "aulas",
+          curso: "aprendizado/cursos",
+          trilha: "aprendizado/trilhas",
+          projeto: "projetos",
+          noticia: "noticias",
+        } as const;
         const relativePath = `public/images/content/${directories[operation.draft.contentType ?? "aula"]}/${operation.draft.slug}/${image.normalizedName}`;
         let destination = await resolveConfinedForWrite(
           this.repository.repositoryPath,

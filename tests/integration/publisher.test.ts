@@ -1,4 +1,11 @@
-import { copyFile, mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import {
+  access,
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readFile,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
@@ -13,7 +20,7 @@ import { inspectImages } from "../../src/main/filesystem/media";
 import { requireGit } from "../../src/main/git/runner";
 import { Publisher } from "../../src/main/repository/publisher";
 import { ManagedRepository } from "../../src/main/repository/repository";
-import type { LessonDraft } from "../../src/shared/types";
+import type { ContentType, LessonDraft } from "../../src/shared/types";
 
 describe("publicação protegida", () => {
   let root: string;
@@ -116,5 +123,103 @@ describe("publicação protegida", () => {
     expect(await readFile(path.join(observer, review.imageRelativePaths[0]!))).toEqual(
       await readFile(image!.sourcePath),
     );
+
+    const deleted = await publisher.deletePublished(review.mdxRelativePath);
+    expect(deleted.pushedTo).toBe("origin/main");
+    const deletionObserver = path.join(root, "deletion-observer");
+    await requireGit(root, ["clone", "--branch", "main", remote, deletionObserver]);
+    await expect(
+      access(path.join(deletionObserver, review.mdxRelativePath)),
+    ).rejects.toThrow();
+  });
+
+  it("publica e remove casos GPT dos cinco tipos em um remoto temporário", async () => {
+    const publishedPaths: string[] = [];
+    const publishCase = async (
+      type: ContentType,
+      relations: Partial<LessonDraft> = {},
+    ) => {
+      const [cover] = await inspectImages([
+        path.resolve("tests/fixtures/imagens/imagem-valida.png"),
+      ]);
+      const suffix = `${type}-gpt-teste-001`;
+      const value: LessonDraft = {
+        id: randomUUID(),
+        schemaVersion: 1,
+        baseCommit: await repository.currentCommit(),
+        contentType: type,
+        slug: suffix,
+        titulo: `${type}_gpt_teste_001`,
+        resumo: `Caso completo de ${type}.`,
+        descricaoLonga: "Descrição longa do caso automatizado.",
+        tags: ["gpt-teste", type],
+        categoria: "Testes",
+        dificuldade: "intermediário",
+        dataPublicacao: "2026-07-20",
+        autores: type === "aula" || type === "noticia" ? ["GPT Teste"] : [],
+        preRequisitos: [],
+        videos:
+          type === "aula" || type === "projeto" ? ["https://example.com/video"] : [],
+        linksExternos:
+          type === "aula" ? [{ titulo: "Referência", url: "https://example.com" }] : [],
+        repositorioGithub:
+          type === "aula" || type === "projeto"
+            ? "https://github.com/Tiago1a2a3a/Site_Gear"
+            : undefined,
+        tecnologias: type === "projeto" ? ["TypeScript", "MDX"] : undefined,
+        documentacao: type === "projeto" ? "https://example.com/docs" : undefined,
+        destaque: type === "curso" || type === "projeto" ? true : undefined,
+        ordem: type === "trilha" ? 1 : undefined,
+        status: "publicado",
+        permiteComentarios: type === "aula",
+        images: [cover!],
+        bannerImageId: cover!.id,
+        body: [
+          { id: randomUUID(), kind: "heading", level: 2, text: "Teste GPT" },
+          { id: randomUUID(), kind: "paragraph", markdown: "Conteúdo completo." },
+          {
+            id: randomUUID(),
+            kind: "image",
+            imageId: cover!.id,
+            alt: "Imagem do caso GPT",
+          },
+        ],
+        ...relations,
+      };
+      const review = await publisher.prepareReview(value);
+      await publisher.confirmWrite(review.operationId);
+      await publisher.confirmPublish(review.operationId);
+      publishedPaths.push(review.mdxRelativePath);
+      return review.mdxRelativePath;
+    };
+
+    const aulaPath = await publishCase("aula");
+    const cursoPath = await publishCase("curso", {
+      aulaSlugs: ["aula-gpt-teste-001"],
+    });
+    const trilhaPath = await publishCase("trilha", {
+      trilhaItens: [
+        { tipo: "aula", slug: "aula-gpt-teste-001" },
+        { tipo: "curso", slug: "curso-gpt-teste-001" },
+      ],
+    });
+    const noticiaPath = await publishCase("noticia");
+    const projetoPath = await publishCase("projeto");
+
+    const observer = path.join(root, "gpt-observer");
+    await requireGit(root, ["clone", "--branch", "main", remote, observer]);
+    for (const relativePath of publishedPaths) {
+      await expect(access(path.join(observer, relativePath))).resolves.toBeUndefined();
+    }
+
+    for (const relativePath of [
+      trilhaPath,
+      cursoPath,
+      aulaPath,
+      noticiaPath,
+      projetoPath,
+    ]) {
+      await publisher.deletePublished(relativePath);
+    }
   });
 });

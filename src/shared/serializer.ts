@@ -2,7 +2,13 @@ import { stringify } from "yaml";
 
 import type { ContentBlock, LessonDraft } from "./types";
 
-const contentDirectories = { aula: "aprendizado/aulas", curso: "aprendizado/cursos", trilha: "aprendizado/trilhas", projeto: "projetos", noticia: "noticias" } as const;
+const contentDirectories = {
+  aula: "aulas",
+  curso: "aprendizado/cursos",
+  trilha: "aprendizado/trilhas",
+  projeto: "projetos",
+  noticia: "noticias",
+} as const;
 
 const unsafeBody = [
   /^\s*import\s/m,
@@ -12,6 +18,11 @@ const unsafeBody = [
   /<script\b/i,
   /javascript:/i,
 ];
+
+function publicImagePath(draft: LessonDraft, name: string): string {
+  const type = draft.contentType ?? "aula";
+  return `/images/content/${contentDirectories[type]}/${draft.slug}/${name}`;
+}
 
 function blockToMdx(block: ContentBlock, draft: LessonDraft): string {
   switch (block.kind) {
@@ -28,8 +39,7 @@ function blockToMdx(block: ContentBlock, draft: LessonDraft): string {
     case "image": {
       const image = draft.images.find((candidate) => candidate.id === block.imageId);
       if (!image) throw new Error(`Imagem não encontrada: ${block.imageId}`);
-      const imageDirectory = draft.contentType === "aula" || !draft.contentType ? "aulas" : contentDirectories[draft.contentType];
-      return `![${block.alt.trim()}](/images/content/${imageDirectory}/${draft.slug}/${image.normalizedName})`;
+      return `![${block.alt.trim()}](${publicImagePath(draft, image.normalizedName)})`;
     }
     case "code":
       return `\`\`\`${block.language.trim()}\n${block.code.replace(/\s+$/, "")}\n\`\`\``;
@@ -45,7 +55,7 @@ function blockToMdx(block: ContentBlock, draft: LessonDraft): string {
 }
 
 export function serializeBody(draft: LessonDraft): string {
-  const body = draft.body
+  return draft.body
     .map((block) => {
       const rendered = blockToMdx(block, draft);
       if (
@@ -60,66 +70,117 @@ export function serializeBody(draft: LessonDraft): string {
     })
     .filter(Boolean)
     .join("\n\n");
-  return body;
 }
 
-export function serializeLesson(draft: LessonDraft): string {
+function serializeFrontmatter(draft: LessonDraft): Record<string, unknown> {
+  const type = draft.contentType ?? "aula";
   const banner = draft.bannerImageId
     ? draft.images.find((image) => image.id === draft.bannerImageId)
     : undefined;
-  if (draft.bannerImageId && !banner)
-    throw new Error("Imagem de banner não encontrada.");
+  if (draft.bannerImageId && !banner) {
+    throw new Error("Imagem de capa não encontrada.");
+  }
 
-  const frontmatter: Record<string, unknown> = {
-    slug: draft.slug,
-    titulo: draft.titulo.trim(),
+  const base = { slug: draft.slug, titulo: draft.titulo.trim() };
+  const cover = banner ? publicImagePath(draft, banner.normalizedName) : "";
+  const tags = draft.tags.map((value) => value.trim());
+
+  if (type === "aula") {
+    return {
+      ...base,
+      ...(cover ? { banner: cover } : {}),
+      resumo: draft.resumo.trim(),
+      ...(tags.length ? { tags } : {}),
+      ...(draft.categoria?.trim() ? { categoria: draft.categoria.trim() } : {}),
+      dificuldade: draft.dificuldade,
+      dataPublicacao: draft.dataPublicacao,
+      ...(draft.dataAtualizacao ? { dataAtualizacao: draft.dataAtualizacao } : {}),
+      autores: draft.autores.map((value) => value.trim()),
+      ...(draft.preRequisitos.length ? { preRequisitos: draft.preRequisitos } : {}),
+      ...(draft.videos.length ? { videos: draft.videos } : {}),
+      ...(draft.linksExternos.length ? { linksExternos: draft.linksExternos } : {}),
+      ...(draft.repositorioGithub
+        ? { repositorioGithub: draft.repositorioGithub }
+        : {}),
+      status: draft.status,
+      permiteComentarios: draft.permiteComentarios,
+    };
+  }
+
+  if (type === "curso") {
+    return {
+      ...base,
+      descricao: draft.resumo.trim(),
+      imagemCapa: cover,
+      ...(draft.dataPublicacao ? { dataPublicacao: draft.dataPublicacao } : {}),
+      ...(draft.destaque !== undefined ? { destaque: draft.destaque } : {}),
+      dificuldade: draft.dificuldade,
+      ...(draft.categoria?.trim() ? { categoria: draft.categoria.trim() } : {}),
+      ...(tags.length ? { tags } : {}),
+      ...(draft.preRequisitos.length ? { preRequisitos: draft.preRequisitos } : {}),
+      aulaSlugs: draft.aulaSlugs ?? [],
+      status: draft.status,
+    };
+  }
+
+  if (type === "trilha") {
+    return {
+      ...base,
+      descricaoCurta: draft.resumo.trim(),
+      ...(draft.descricaoLonga?.trim()
+        ? { descricaoLonga: draft.descricaoLonga.trim() }
+        : {}),
+      imagemCapa: cover,
+      area: draft.categoria?.trim() || "Geral",
+      ordem: draft.ordem ?? 1,
+      ...(draft.dataPublicacao ? { dataPublicacao: draft.dataPublicacao } : {}),
+      itens: draft.trilhaItens ?? [],
+      status: draft.status,
+    };
+  }
+
+  if (type === "projeto") {
+    return {
+      ...base,
+      descricaoCurta: draft.resumo.trim(),
+      ...(draft.descricaoLonga?.trim()
+        ? { descricaoLonga: draft.descricaoLonga.trim() }
+        : {}),
+      ...(draft.images.length
+        ? {
+            imagens: draft.images.map((image) =>
+              publicImagePath(draft, image.normalizedName),
+            ),
+          }
+        : {}),
+      ...(draft.videos.length ? { videos: draft.videos } : {}),
+      ...(draft.tecnologias?.length ? { tecnologias: draft.tecnologias } : {}),
+      ...(draft.repositorioGithub
+        ? { repositorioGithub: draft.repositorioGithub }
+        : {}),
+      ...(draft.documentacao ? { documentacao: draft.documentacao } : {}),
+      status: draft.status === "publicado" ? "concluído" : "em andamento",
+      ...(draft.destaque !== undefined ? { destaque: draft.destaque } : {}),
+    };
+  }
+
+  return {
+    ...base,
+    imagemCapa: cover,
+    ...(draft.categoria?.trim() ? { categoria: draft.categoria.trim() } : {}),
+    ...(tags.length ? { tags } : {}),
+    resumo: draft.resumo.trim(),
+    dataPublicacao: draft.dataPublicacao,
+    autor: draft.autores[0]?.trim() ?? "",
+    status: draft.status,
   };
-  if (banner) {
-    frontmatter.banner = `/images/content/aulas/${draft.slug}/${banner.normalizedName}`;
-  }
-  frontmatter.resumo = draft.resumo.trim();
-  if (draft.tags.length) frontmatter.tags = draft.tags.map((value) => value.trim());
-  if (draft.categoria?.trim()) frontmatter.categoria = draft.categoria.trim();
-  frontmatter.dificuldade = draft.dificuldade;
-  frontmatter.dataPublicacao = draft.dataPublicacao;
-  if (draft.dataAtualizacao) frontmatter.dataAtualizacao = draft.dataAtualizacao;
-  frontmatter.autores = draft.autores.map((value) => value.trim());
-  if (draft.preRequisitos.length) frontmatter.preRequisitos = draft.preRequisitos;
-  if (draft.videos.length) frontmatter.videos = draft.videos;
-  if (draft.linksExternos.length) frontmatter.linksExternos = draft.linksExternos;
-  if (draft.repositorioGithub) frontmatter.repositorioGithub = draft.repositorioGithub;
-  frontmatter.status = draft.status;
-  frontmatter.permiteComentarios = draft.permiteComentarios;
-  if (draft.contentType === "curso") {
-    frontmatter.descricao = draft.resumo.trim();
-    frontmatter.imagemCapa = banner ? banner.normalizedName : "";
-    frontmatter.aulaSlugs = draft.aulaSlugs ?? [];
-    if (draft.destaque !== undefined) frontmatter.destaque = draft.destaque;
-  } else if (draft.contentType === "trilha") {
-    frontmatter.descricaoCurta = draft.resumo.trim();
-    if (draft.descricaoLonga?.trim()) frontmatter.descricaoLonga = draft.descricaoLonga.trim();
-    frontmatter.imagemCapa = banner ? banner.normalizedName : "";
-    frontmatter.area = draft.categoria ?? "geral";
-    frontmatter.ordem = 1;
-    frontmatter.itens = draft.trilhaItens ?? [];
-  } else if (draft.contentType === "projeto") {
-    frontmatter.descricaoCurta = draft.resumo.trim();
-    if (draft.descricaoLonga?.trim()) frontmatter.descricaoLonga = draft.descricaoLonga.trim();
-    if (draft.tecnologias?.length) frontmatter.tecnologias = draft.tecnologias;
-    if (draft.destaque !== undefined) frontmatter.destaque = draft.destaque;
-    if (draft.documentacao) frontmatter.documentacao = draft.documentacao;
-    delete frontmatter.status;
-    frontmatter.status = draft.status === "publicado" ? "concluído" : "em andamento";
-  } else if (draft.contentType === "noticia") {
-    frontmatter.imagemCapa = banner ? banner.normalizedName : "";
-    frontmatter.autor = draft.autores[0] ?? "GEAR";
-  }
+}
 
-  const yaml = stringify(frontmatter, {
+export function serializeLesson(draft: LessonDraft): string {
+  const yaml = stringify(serializeFrontmatter(draft), {
     lineWidth: 0,
     defaultStringType: "PLAIN",
     defaultKeyType: "PLAIN",
   }).trimEnd();
-  const body = serializeBody(draft);
-  return `---\n${yaml}\n---\n\n${body}\n`;
+  return `---\n${yaml}\n---\n\n${serializeBody(draft)}\n`;
 }

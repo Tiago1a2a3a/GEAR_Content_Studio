@@ -39,6 +39,114 @@ function createDraft(baseCommit = ""): LessonDraft {
   };
 }
 
+function fillGptTestCase(
+  current: LessonDraft,
+  catalog: readonly CatalogEntry[],
+): LessonDraft {
+  const type = current.contentType ?? "aula";
+  const storageKey = `gear-gpt-test-${type}`;
+  const number = Number.parseInt(localStorage.getItem(storageKey) ?? "0", 10) + 1;
+  localStorage.setItem(storageKey, String(number));
+  const suffix = String(number).padStart(3, "0");
+  const title = `${type}_gpt_teste_${suffix}`;
+  const prioritizeGpt = (entries: CatalogEntry[]) =>
+    entries.sort(
+      (first, second) =>
+        Number(second.slug.includes("gpt-teste")) -
+        Number(first.slug.includes("gpt-teste")),
+    );
+  const publishedLessons = prioritizeGpt(
+    catalog.filter((entry) => entry.type === "aula" && entry.status === "publicado"),
+  );
+  const publishedCourses = prioritizeGpt(
+    catalog.filter((entry) => entry.type === "curso" && entry.status === "publicado"),
+  );
+  return {
+    ...current,
+    titulo: title,
+    slug: toSlug(title),
+    resumo: `Caso automatizado ${suffix} para validar todos os campos de ${type}.`,
+    descricaoLonga:
+      type === "trilha" || type === "projeto"
+        ? `Descrição longa do caso GPT ${suffix}, com contexto editorial completo.`
+        : undefined,
+    tags: ["gpt-teste", type, `teste-${suffix}`],
+    categoria: type === "trilha" ? "Testes automatizados" : "Validação GPT",
+    dificuldade: "intermediário",
+    autores: ["GPT Teste", "Equipe GEAR"],
+    preRequisitos:
+      type === "aula" && publishedLessons[0] ? [publishedLessons[0].slug] : [],
+    aulaSlugs:
+      type === "curso"
+        ? publishedLessons.slice(0, 2).map((entry) => entry.slug)
+        : undefined,
+    trilhaItens:
+      type === "trilha"
+        ? [
+            ...(publishedLessons[0]
+              ? [{ tipo: "aula" as const, slug: publishedLessons[0].slug }]
+              : []),
+            ...(publishedCourses[0]
+              ? [{ tipo: "curso" as const, slug: publishedCourses[0].slug }]
+              : []),
+          ]
+        : undefined,
+    videos:
+      type === "aula" || type === "projeto"
+        ? ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
+        : [],
+    linksExternos:
+      type === "aula" ? [{ titulo: "Portal UFMG", url: "https://ufmg.br" }] : [],
+    repositorioGithub:
+      type === "aula" || type === "projeto"
+        ? "https://github.com/Tiago1a2a3a/Site_Gear"
+        : undefined,
+    tecnologias: type === "projeto" ? ["TypeScript", "MDX", "Git"] : undefined,
+    documentacao:
+      type === "projeto" ? "https://github.com/Tiago1a2a3a/Site_Gear" : undefined,
+    destaque: type === "curso" || type === "projeto" ? true : undefined,
+    ordem: type === "trilha" ? number : undefined,
+    status: "publicado",
+    permiteComentarios: type === "aula",
+    body: [
+      {
+        id: randomUUID(),
+        kind: "heading",
+        level: 2,
+        text: `Teste completo ${suffix}`,
+      },
+      {
+        id: randomUUID(),
+        kind: "paragraph",
+        markdown:
+          "Parágrafo com **negrito**, *itálico* e [link HTTPS](https://ufmg.br).",
+      },
+      {
+        id: randomUUID(),
+        kind: "unordered-list",
+        items: ["Primeiro item", "Segundo item"],
+      },
+      {
+        id: randomUUID(),
+        kind: "ordered-list",
+        items: ["Primeiro passo", "Segundo passo"],
+      },
+      {
+        id: randomUUID(),
+        kind: "code",
+        language: "ts",
+        code: `const caso = "${type}-${suffix}";`,
+      },
+      {
+        id: randomUUID(),
+        kind: "quote",
+        markdown: "Caso GPT criado para validar a publicação.",
+      },
+      { id: randomUUID(), kind: "separator" },
+    ],
+  };
+}
+
 function ErrorMessage({ message }: { message?: string }) {
   if (!message) return null;
   return (
@@ -47,6 +155,11 @@ function ErrorMessage({ message }: { message?: string }) {
     </div>
   );
 }
+
+const unexpectedErrorMessage = (error: unknown): string =>
+  error instanceof Error
+    ? error.message
+    : "A operação falhou sem retornar detalhes. Tente novamente.";
 
 function Home({
   environment,
@@ -127,10 +240,25 @@ function Home({
   );
 }
 
-function Catalog({ entries, onDelete }: { entries: CatalogEntry[]; onDelete(entry: CatalogEntry): void }) {
+function Catalog({
+  entries,
+  onDelete,
+}: {
+  entries: CatalogEntry[];
+  onDelete(entry: CatalogEntry): Promise<boolean>;
+}) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
   const [selected, setSelected] = useState<CatalogEntry>();
+  const [deleting, setDeleting] = useState(false);
+  useEffect(() => {
+    if (
+      selected &&
+      !entries.some((entry) => entry.sourcePath === selected.sourcePath)
+    ) {
+      setSelected(undefined);
+    }
+  }, [entries, selected]);
   const visible = useMemo(() => {
     const normalized = query.toLocaleLowerCase("pt-BR");
     return entries.filter(
@@ -228,7 +356,20 @@ function Catalog({ entries, onDelete }: { entries: CatalogEntry[]; onDelete(entr
                   )}
                 </dd>
               </dl>
-              <button className="danger" onClick={() => onDelete(selected)}>Excluir publicado</button>
+              <button
+                className="danger"
+                disabled={deleting}
+                onClick={async () => {
+                  setDeleting(true);
+                  try {
+                    if (await onDelete(selected)) setSelected(undefined);
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+              >
+                {deleting ? "Excluindo…" : "Excluir publicado"}
+              </button>
             </>
           ) : (
             <div className="empty">Selecione um conteúdo para ver detalhes.</div>
@@ -440,7 +581,7 @@ function LessonEditor({
 }: {
   initialDraft: LessonDraft;
   catalog: CatalogEntry[];
-  onSaved(): void;
+  onSaved(draftId: string): void;
   onDraftChange(draft: LessonDraft): void;
 }) {
   const [draft, setDraft] = useState(initialDraft);
@@ -451,12 +592,18 @@ function LessonEditor({
   const [publish, setPublish] = useState<PublishBundle>();
   const [publishedCommit, setPublishedCommit] = useState("");
   const autoSlug = useRef(initialDraft.slug === toSlug(initialDraft.titulo));
-  const set = <K extends keyof LessonDraft>(key: K, value: LessonDraft[K]) =>
+  const published = useRef(false);
+  const set = <K extends keyof LessonDraft>(key: K, value: LessonDraft[K]) => {
+    setReview(undefined);
+    setPublish(undefined);
     setDraft((current) => ({ ...current, [key]: value }));
+  };
 
   useEffect(() => {
     onDraftChange(draft);
-    const save = () => void window.gearContentStudio.saveDraft(draft);
+    const save = () => {
+      if (!published.current) void window.gearContentStudio.saveDraft(draft);
+    };
     const timer = window.setTimeout(save, 750);
     window.addEventListener("beforeunload", save);
     return () => {
@@ -467,13 +614,19 @@ function LessonEditor({
   }, [draft, onDraftChange]);
 
   const lessons = catalog.filter((entry) => entry.type === "aula");
+  const courses = catalog.filter((entry) => entry.type === "curso");
   const prepare = async () => {
     setBusy(true);
     setError("");
-    const result = await window.gearContentStudio.prepareReview(draft);
-    setBusy(false);
-    if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
-    setReview(result.value);
+    try {
+      const result = await window.gearContentStudio.prepareReview(draft);
+      if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
+      setReview(result.value);
+    } catch (caught) {
+      setError(`Não foi possível validar: ${unexpectedErrorMessage(caught)}`);
+    } finally {
+      setBusy(false);
+    }
   };
   const write = async () => {
     if (
@@ -482,10 +635,15 @@ function LessonEditor({
     )
       return;
     setBusy(true);
-    const result = await window.gearContentStudio.confirmWrite(review.operationId);
-    setBusy(false);
-    if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
-    setPublish(result.value);
+    try {
+      const result = await window.gearContentStudio.confirmWrite(review.operationId);
+      if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
+      setPublish(result.value);
+    } catch (caught) {
+      setError(`Não foi possível preparar: ${unexpectedErrorMessage(caught)}`);
+    } finally {
+      setBusy(false);
+    }
   };
   const publishNow = async () => {
     if (
@@ -496,11 +654,17 @@ function LessonEditor({
     )
       return;
     setBusy(true);
-    const result = await window.gearContentStudio.confirmPublish(publish.operationId);
-    setBusy(false);
-    if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
-    setPublishedCommit(result.value.commit);
-    onSaved();
+    try {
+      const result = await window.gearContentStudio.confirmPublish(publish.operationId);
+      if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
+      published.current = true;
+      setPublishedCommit(result.value.commit);
+      onSaved(draft.id);
+    } catch (caught) {
+      setError(`Não foi possível publicar: ${unexpectedErrorMessage(caught)}`);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -516,7 +680,20 @@ function LessonEditor({
             }
           </h1>
         </div>
-        <span>Rascunho salvo automaticamente</span>
+        <div>
+          <span>Rascunho salvo automaticamente</span>
+          <button
+            type="button"
+            onClick={() => {
+              autoSlug.current = false;
+              setReview(undefined);
+              setPublish(undefined);
+              setDraft((current) => fillGptTestCase(current, catalog));
+            }}
+          >
+            Preencher caso GPT
+          </button>
+        </div>
       </div>
       <ErrorMessage message={error} />
       <div className="steps">
@@ -534,7 +711,12 @@ function LessonEditor({
         <div className="form-grid">
           <label>
             Tipo de conteúdo
-            <select value={draft.contentType} onChange={(event) => set("contentType", event.target.value as LessonDraft["contentType"])}>
+            <select
+              value={draft.contentType}
+              onChange={(event) =>
+                set("contentType", event.target.value as LessonDraft["contentType"])
+              }
+            >
               <option value="aula">Aula</option>
               <option value="curso">Curso</option>
               <option value="trilha">Trilha</option>
@@ -542,28 +724,62 @@ function LessonEditor({
               <option value="projeto">Projeto</option>
             </select>
           </label>
-          {draft.contentType === "curso" && (
-            <label className="wide">
-              Slugs das aulas, separados por vírgula
-              <input value={(draft.aulaSlugs ?? []).join(", ")} onChange={(event) => set("aulaSlugs", event.target.value.split(",").map((value) => value.trim()).filter(Boolean))} />
-            </label>
-          )}
-          {draft.contentType === "trilha" && (
-            <label className="wide">
-              Itens da trilha, no formato tipo:slug, separados por vírgula
-              <input value={(draft.trilhaItens ?? []).map((item) => `${item.tipo}:${item.slug}`).join(", ")} onChange={(event) => set("trilhaItens", event.target.value.split(",").map((value) => { const [tipo, ...slug] = value.trim().split(":"); return { tipo: (tipo === "curso" ? "curso" : "aula") as "curso" | "aula", slug: slug.join(":").trim() }; }).filter((item) => item.slug))} />
-            </label>
-          )}
           {(draft.contentType === "trilha" || draft.contentType === "projeto") && (
             <label className="wide">
               Descrição longa, opcional
-              <textarea value={draft.descricaoLonga ?? ""} onChange={(event) => set("descricaoLonga", event.target.value)} />
+              <textarea
+                value={draft.descricaoLonga ?? ""}
+                onChange={(event) => set("descricaoLonga", event.target.value)}
+              />
+            </label>
+          )}
+          {draft.contentType === "trilha" && (
+            <label>
+              Ordem editorial
+              <input
+                type="number"
+                min={0}
+                value={draft.ordem ?? 1}
+                onChange={(event) => set("ordem", Number(event.target.value))}
+              />
             </label>
           )}
           {draft.contentType === "projeto" && (
-            <label>
-              Tecnologias, separadas por vírgula
-              <input value={(draft.tecnologias ?? []).join(", ")} onChange={(event) => set("tecnologias", event.target.value.split(",").map((value) => value.trim()).filter(Boolean))} />
+            <>
+              <label>
+                Tecnologias, separadas por vírgula
+                <input
+                  value={(draft.tecnologias ?? []).join(", ")}
+                  onChange={(event) =>
+                    set(
+                      "tecnologias",
+                      event.target.value
+                        .split(",")
+                        .map((value) => value.trim())
+                        .filter(Boolean),
+                    )
+                  }
+                />
+              </label>
+              <label>
+                Documentação HTTPS
+                <input
+                  value={draft.documentacao ?? ""}
+                  onChange={(event) =>
+                    set("documentacao", event.target.value || undefined)
+                  }
+                />
+              </label>
+            </>
+          )}
+          {(draft.contentType === "curso" || draft.contentType === "projeto") && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={draft.destaque ?? false}
+                onChange={(event) => set("destaque", event.target.checked)}
+              />
+              Conteúdo em destaque
             </label>
           )}
           <label className="wide">
@@ -590,24 +806,28 @@ function LessonEditor({
               }}
             />
           </label>
-          <label>
-            Data de publicação
-            <input
-              type="date"
-              value={draft.dataPublicacao}
-              onChange={(event) => set("dataPublicacao", event.target.value)}
-            />
-          </label>
-          <label>
-            Data de atualização, opcional
-            <input
-              type="date"
-              value={draft.dataAtualizacao ?? ""}
-              onChange={(event) =>
-                set("dataAtualizacao", event.target.value || undefined)
-              }
-            />
-          </label>
+          {draft.contentType !== "projeto" && (
+            <label>
+              Data de publicação
+              <input
+                type="date"
+                value={draft.dataPublicacao}
+                onChange={(event) => set("dataPublicacao", event.target.value)}
+              />
+            </label>
+          )}
+          {(draft.contentType === "aula" || !draft.contentType) && (
+            <label>
+              Data de atualização, opcional
+              <input
+                type="date"
+                value={draft.dataAtualizacao ?? ""}
+                onChange={(event) =>
+                  set("dataAtualizacao", event.target.value || undefined)
+                }
+              />
+            </label>
+          )}
           <label className="wide">
             Resumo
             <textarea
@@ -615,56 +835,70 @@ function LessonEditor({
               onChange={(event) => set("resumo", event.target.value)}
             />
           </label>
-          <label>
-            Categoria
-            <input
-              value={draft.categoria ?? ""}
-              onChange={(event) => set("categoria", event.target.value || undefined)}
-            />
-          </label>
-          <label>
-            Dificuldade
-            <select
-              value={draft.dificuldade}
-              onChange={(event) =>
-                set("dificuldade", event.target.value as LessonDraft["dificuldade"])
-              }
-            >
-              <option value="iniciante">Iniciante</option>
-              <option value="intermediário">Intermediário</option>
-              <option value="avançado">Avançado</option>
-            </select>
-          </label>
-          <label>
-            Tags, separadas por vírgula
-            <input
-              value={draft.tags.join(", ")}
-              onChange={(event) =>
-                set(
-                  "tags",
-                  event.target.value
-                    .split(",")
-                    .map((value) => value.trim())
-                    .filter(Boolean),
-                )
-              }
-            />
-          </label>
-          <label>
-            Autores, separados por vírgula
-            <input
-              value={draft.autores.join(", ")}
-              onChange={(event) =>
-                set(
-                  "autores",
-                  event.target.value
-                    .split(",")
-                    .map((value) => value.trim())
-                    .filter(Boolean),
-                )
-              }
-            />
-          </label>
+          {draft.contentType !== "projeto" && (
+            <label>
+              {draft.contentType === "trilha" ? "Área" : "Categoria"}
+              <input
+                value={draft.categoria ?? ""}
+                onChange={(event) => set("categoria", event.target.value || undefined)}
+              />
+            </label>
+          )}
+          {(draft.contentType === "aula" ||
+            draft.contentType === "curso" ||
+            !draft.contentType) && (
+            <label>
+              Dificuldade
+              <select
+                value={draft.dificuldade}
+                onChange={(event) =>
+                  set("dificuldade", event.target.value as LessonDraft["dificuldade"])
+                }
+              >
+                <option value="iniciante">Iniciante</option>
+                <option value="intermediário">Intermediário</option>
+                <option value="avançado">Avançado</option>
+              </select>
+            </label>
+          )}
+          {["aula", "curso", "noticia"].includes(draft.contentType ?? "aula") && (
+            <label>
+              Tags, separadas por vírgula
+              <input
+                value={draft.tags.join(", ")}
+                onChange={(event) =>
+                  set(
+                    "tags",
+                    event.target.value
+                      .split(",")
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  )
+                }
+              />
+            </label>
+          )}
+          {(draft.contentType === "aula" ||
+            draft.contentType === "noticia" ||
+            !draft.contentType) && (
+            <label>
+              {draft.contentType === "noticia"
+                ? "Autor"
+                : "Autores, separados por vírgula"}
+              <input
+                value={draft.autores.join(", ")}
+                onChange={(event) =>
+                  set(
+                    "autores",
+                    event.target.value
+                      .split(",")
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  )
+                }
+              />
+            </label>
+          )}
           <label>
             Status
             <select
@@ -673,18 +907,24 @@ function LessonEditor({
                 set("status", event.target.value as LessonDraft["status"])
               }
             >
-              <option value="rascunho">Rascunho</option>
-              <option value="publicado">Publicado</option>
+              <option value="rascunho">
+                {draft.contentType === "projeto" ? "Em andamento" : "Rascunho"}
+              </option>
+              <option value="publicado">
+                {draft.contentType === "projeto" ? "Concluído" : "Publicado"}
+              </option>
             </select>
           </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={draft.permiteComentarios}
-              onChange={(event) => set("permiteComentarios", event.target.checked)}
-            />
-            Permitir comentários
-          </label>
+          {(draft.contentType === "aula" || !draft.contentType) && (
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={draft.permiteComentarios}
+                onChange={(event) => set("permiteComentarios", event.target.checked)}
+              />
+              Permitir comentários
+            </label>
+          )}
         </div>
       )}
       {step === 2 && (
@@ -696,86 +936,212 @@ function LessonEditor({
       )}
       {step === 3 && (
         <div className="form-grid">
-          <fieldset className="wide">
-            <legend>Pré-requisitos</legend>
-            <div className="choice-grid">
-              {lessons.map((lesson) => (
-                <label className="check" key={lesson.slug}>
-                  <input
-                    type="checkbox"
-                    checked={draft.preRequisitos.includes(lesson.slug)}
-                    disabled={
-                      draft.status === "publicado" && lesson.status !== "publicado"
-                    }
-                    onChange={(event) =>
-                      set(
-                        "preRequisitos",
-                        event.target.checked
-                          ? [...draft.preRequisitos, lesson.slug]
-                          : draft.preRequisitos.filter((slug) => slug !== lesson.slug),
-                      )
-                    }
-                  />
-                  {lesson.titulo} <small>({lesson.status})</small>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <label className="wide">
-            Vídeos HTTPS, um por linha
-            <textarea
-              value={draft.videos.join("\n")}
-              onChange={(event) =>
-                set(
-                  "videos",
-                  event.target.value
-                    .split("\n")
-                    .map((value) => value.trim())
-                    .filter(Boolean),
-                )
-              }
-            />
-            <small>Vídeos aparecem em Recursos da aula, após o conteúdo.</small>
-          </label>
-          <label className="wide">
-            Links externos, um por linha no formato título | URL HTTPS
-            <textarea
-              value={draft.linksExternos
-                .map((link) => `${link.titulo} | ${link.url}`)
-                .join("\n")}
-              onChange={(event) =>
-                set(
-                  "linksExternos",
-                  event.target.value
-                    .split("\n")
-                    .map((line) => {
-                      const [titulo, ...urlParts] = line.split("|");
-                      return {
-                        titulo: titulo?.trim() ?? "",
-                        url: urlParts.join("|").trim(),
-                      };
-                    })
-                    .filter((link) => link.titulo || link.url),
-                )
-              }
-            />
-          </label>
-          <label className="wide">
-            Repositório GitHub
-            <input
-              value={draft.repositorioGithub ?? ""}
-              onChange={(event) =>
-                set("repositorioGithub", event.target.value || undefined)
-              }
-            />
-          </label>
+          {draft.contentType === "curso" && (
+            <fieldset className="wide">
+              <legend>Aulas do Curso</legend>
+              <div className="choice-grid">
+                {lessons.map((lesson) => (
+                  <label className="check" key={lesson.slug}>
+                    <input
+                      type="checkbox"
+                      checked={(draft.aulaSlugs ?? []).includes(lesson.slug)}
+                      disabled={
+                        draft.status === "publicado" && lesson.status !== "publicado"
+                      }
+                      onChange={(event) =>
+                        set(
+                          "aulaSlugs",
+                          event.target.checked
+                            ? [...(draft.aulaSlugs ?? []), lesson.slug]
+                            : (draft.aulaSlugs ?? []).filter(
+                                (slug) => slug !== lesson.slug,
+                              ),
+                        )
+                      }
+                    />
+                    {lesson.titulo} <small>({lesson.status})</small>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+          {draft.contentType === "trilha" && (
+            <fieldset className="wide">
+              <legend>Itens da Trilha, na ordem de seleção</legend>
+              <div className="choice-grid">
+                {[...lessons, ...courses].map((entry) => {
+                  const selectedItem = (draft.trilhaItens ?? []).some(
+                    (item) => item.tipo === entry.type && item.slug === entry.slug,
+                  );
+                  return (
+                    <label className="check" key={`${entry.type}:${entry.slug}`}>
+                      <input
+                        type="checkbox"
+                        checked={selectedItem}
+                        disabled={
+                          draft.status === "publicado" && entry.status !== "publicado"
+                        }
+                        onChange={(event) =>
+                          set(
+                            "trilhaItens",
+                            event.target.checked
+                              ? [
+                                  ...(draft.trilhaItens ?? []),
+                                  {
+                                    tipo: entry.type as "aula" | "curso",
+                                    slug: entry.slug,
+                                  },
+                                ]
+                              : (draft.trilhaItens ?? []).filter(
+                                  (item) =>
+                                    !(
+                                      item.tipo === entry.type &&
+                                      item.slug === entry.slug
+                                    ),
+                                ),
+                          )
+                        }
+                      />
+                      {entry.type}: {entry.titulo} <small>({entry.status})</small>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          )}
+          {(draft.contentType === "aula" ||
+            draft.contentType === "curso" ||
+            !draft.contentType) && (
+            <fieldset className="wide">
+              <legend>Pré-requisitos</legend>
+              <div className="choice-grid">
+                {(draft.contentType === "curso" ? [...lessons, ...courses] : lessons)
+                  .filter((entry) => entry.slug !== draft.slug)
+                  .map((lesson) => (
+                    <label className="check" key={lesson.slug}>
+                      <input
+                        type="checkbox"
+                        checked={draft.preRequisitos.includes(lesson.slug)}
+                        disabled={
+                          draft.status === "publicado" && lesson.status !== "publicado"
+                        }
+                        onChange={(event) =>
+                          set(
+                            "preRequisitos",
+                            event.target.checked
+                              ? [...draft.preRequisitos, lesson.slug]
+                              : draft.preRequisitos.filter(
+                                  (slug) => slug !== lesson.slug,
+                                ),
+                          )
+                        }
+                      />
+                      {lesson.titulo} <small>({lesson.status})</small>
+                    </label>
+                  ))}
+              </div>
+            </fieldset>
+          )}
+          {(draft.contentType === "aula" ||
+            draft.contentType === "projeto" ||
+            !draft.contentType) && (
+            <label className="wide">
+              Vídeos HTTPS, um por linha
+              <textarea
+                value={draft.videos.join("\n")}
+                onChange={(event) =>
+                  set(
+                    "videos",
+                    event.target.value
+                      .split("\n")
+                      .map((value) => value.trim())
+                      .filter(Boolean),
+                  )
+                }
+              />
+              <small>Vídeos aparecem em Recursos da aula, após o conteúdo.</small>
+            </label>
+          )}
+          {(draft.contentType === "aula" || !draft.contentType) && (
+            <label className="wide">
+              Links externos, um por linha no formato título | URL HTTPS
+              <textarea
+                value={draft.linksExternos
+                  .map((link) => `${link.titulo} | ${link.url}`)
+                  .join("\n")}
+                onChange={(event) =>
+                  set(
+                    "linksExternos",
+                    event.target.value
+                      .split("\n")
+                      .map((line) => {
+                        const [titulo, ...urlParts] = line.split("|");
+                        return {
+                          titulo: titulo?.trim() ?? "",
+                          url: urlParts.join("|").trim(),
+                        };
+                      })
+                      .filter((link) => link.titulo || link.url),
+                  )
+                }
+              />
+            </label>
+          )}
+          {(draft.contentType === "aula" ||
+            draft.contentType === "projeto" ||
+            !draft.contentType) && (
+            <label className="wide">
+              Repositório GitHub
+              <input
+                value={draft.repositorioGithub ?? ""}
+                onChange={(event) =>
+                  set("repositorioGithub", event.target.value || undefined)
+                }
+              />
+            </label>
+          )}
           <div className="wide">
             <button
               type="button"
               onClick={async () => {
-                const result = await window.gearContentStudio.chooseImages();
-                if (result.ok) set("images", [...draft.images, ...result.value]);
-                else setError(result.error.message);
+                try {
+                  const result = await window.gearContentStudio.chooseImages();
+                  if (result.ok) {
+                    setDraft((current) => {
+                      const first = result.value[0];
+                      const isGptCase = current.titulo.includes("_gpt_teste_");
+                      return {
+                        ...current,
+                        images: [...current.images, ...result.value],
+                        bannerImageId:
+                          current.bannerImageId ??
+                          (["curso", "trilha", "noticia"].includes(
+                            current.contentType ?? "aula",
+                          )
+                            ? first?.id
+                            : undefined),
+                        body:
+                          isGptCase &&
+                          first &&
+                          !current.body.some((block) => block.kind === "image")
+                            ? [
+                                ...current.body,
+                                {
+                                  id: randomUUID(),
+                                  kind: "image" as const,
+                                  imageId: first.id,
+                                  alt: `Imagem do ${current.titulo}`,
+                                },
+                              ]
+                            : current.body,
+                      };
+                    });
+                  } else setError(result.error.message);
+                } catch (caught) {
+                  setError(
+                    `Não foi possível selecionar imagens: ${unexpectedErrorMessage(caught)}`,
+                  );
+                }
               }}
             >
               Selecionar imagens
@@ -790,14 +1156,18 @@ function LessonEditor({
             </ul>
             {draft.images.length > 0 && (
               <label>
-                Banner opcional
+                {["curso", "trilha", "noticia"].includes(draft.contentType ?? "aula")
+                  ? "Imagem de capa obrigatória"
+                  : draft.contentType === "projeto"
+                    ? "Imagem principal"
+                    : "Banner opcional"}
                 <select
                   value={draft.bannerImageId ?? ""}
                   onChange={(event) =>
                     set("bannerImageId", event.target.value || undefined)
                   }
                 >
-                  <option value="">Sem banner</option>
+                  <option value="">Selecione uma imagem</option>
                   {draft.images.map((image) => (
                     <option key={image.id} value={image.id}>
                       {image.normalizedName}
@@ -916,12 +1286,17 @@ export function App() {
     ]);
     if (environmentResult.ok) setEnvironment(environmentResult.value);
     if (catalogResult.ok) setCatalog(catalogResult.value);
-    if (draftsResult.ok) setDrafts(draftsResult.value);
+    if (draftsResult.ok) {
+      setDrafts((current) => {
+        const merged = new Map(
+          draftsResult.value.map((draft) => [draft.id, draft] as const),
+        );
+        for (const draft of current) merged.set(draft.id, draft);
+        return [...merged.values()];
+      });
+    }
   };
   useEffect(() => void refresh(), []);
-  useEffect(() => {
-    if (screen === "rascunhos") void refresh();
-  }, [screen]);
 
   const synchronize = async () => {
     setBusy(true);
@@ -986,22 +1361,59 @@ export function App() {
             busy={busy}
           />
         )}
-        {screen === "catalogo" && <Catalog entries={catalog} onDelete={async (entry) => {
-          if (!window.confirm(`Excluir ${entry.sourcePath}? Esta ação removerá o MDX do GitHub.`)) return;
-          if (!window.confirm(`Confirma novamente a exclusão de ${entry.slug}? Dependências existentes bloquearão a operação.`)) return;
-          setBusy(true);
-          const result = await window.gearContentStudio.deletePublished({ sourcePath: entry.sourcePath });
-          setBusy(false);
-          if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
-          setError("");
-          await refresh();
-        }} />}
+        {screen === "catalogo" && (
+          <Catalog
+            entries={catalog}
+            onDelete={async (entry) => {
+              if (
+                !window.confirm(
+                  `Excluir ${entry.sourcePath}? Esta ação removerá o MDX do GitHub.`,
+                )
+              )
+                return false;
+              if (
+                !window.confirm(
+                  `Confirma novamente a exclusão de ${entry.slug}? Dependências existentes bloquearão a operação.`,
+                )
+              )
+                return false;
+              setBusy(true);
+              try {
+                const result = await window.gearContentStudio.deletePublished({
+                  sourcePath: entry.sourcePath,
+                });
+                if (!result.ok) {
+                  setError(`${result.error.title}: ${result.error.message}`);
+                  return false;
+                }
+                setCatalog((current) =>
+                  current.filter(
+                    (candidate) => candidate.sourcePath !== entry.sourcePath,
+                  ),
+                );
+                setError("");
+                await refresh();
+                return true;
+              } catch (caught) {
+                setError(`Não foi possível excluir: ${unexpectedErrorMessage(caught)}`);
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        )}
         {screen === "nova-aula" && activeDraft && (
           <LessonEditor
             key={activeDraft.id}
             initialDraft={activeDraft}
             catalog={catalog}
-            onSaved={() => void refresh()}
+            onSaved={(draftId) => {
+              setDrafts((current) => current.filter((draft) => draft.id !== draftId));
+              setActiveDraft(undefined);
+              setScreen("catalogo");
+              void refresh();
+            }}
             onDraftChange={updateActiveDraft}
           />
         )}
@@ -1037,7 +1449,9 @@ export function App() {
                           setError(`${result.error.title}: ${result.error.message}`);
                           return;
                         }
-                        await refresh();
+                        setDrafts((current) =>
+                          current.filter((candidate) => candidate.id !== draft.id),
+                        );
                       }}
                     >
                       Excluir

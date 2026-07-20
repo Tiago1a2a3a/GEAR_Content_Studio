@@ -31,3 +31,28 @@ test("atualiza slug ao digitar e preserva rascunho ao navegar", async () => {
   await expect(window.getByLabel("Título")).toHaveValue("MEU NOME E TIAGO");
   await app.close();
 });
+
+test("preenche casos GPT numerados para os cinco tipos", async () => {
+  const userData = await mkdtemp(path.join(os.tmpdir(), "gear-e2e-gpt-cases-"));
+  const app = await electron.launch({
+    executablePath: path.resolve("node_modules/electron/dist/electron.exe"),
+    args: ["out/main/index.js", `--user-data-dir=${userData}`],
+  });
+  const window = await app.firstWindow();
+  const expected = [
+    ["aula", "aula_gpt_teste_001"],
+    ["curso", "curso_gpt_teste_001"],
+    ["trilha", "trilha_gpt_teste_001"],
+    ["noticia", "noticia_gpt_teste_001"],
+    ["projeto", "projeto_gpt_teste_001"],
+  ] as const;
+
+  for (const [type, title] of expected) {
+    await window.getByRole("button", { name: "Nova Aula", exact: true }).click();
+    await window.getByLabel("Tipo de conteúdo").selectOption(type);
+    await window.getByRole("button", { name: "Preencher caso GPT" }).click();
+    await expect(window.getByLabel("Título")).toHaveValue(title);
+    await expect(window.getByLabel("Slug")).toHaveValue(title.replaceAll("_", "-"));
+  }
+  await app.close();
+});
