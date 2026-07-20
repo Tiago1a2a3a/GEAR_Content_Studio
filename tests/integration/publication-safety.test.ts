@@ -20,6 +20,7 @@ import {
 import { requireGit } from "../../src/main/git/runner";
 import { Publisher } from "../../src/main/repository/publisher";
 import { ManagedRepository } from "../../src/main/repository/repository";
+import { serializeLesson } from "../../src/shared/serializer";
 import type { LessonDraft } from "../../src/shared/types";
 
 async function setup(validationExitCode = 0) {
@@ -145,6 +146,28 @@ describe("falhas de publicação são seguras", () => {
       access(path.join(context.repository.repositoryPath, review.mdxRelativePath)),
     ).rejects.toThrow();
     await expect(context.repository.ensureClean()).resolves.toBeUndefined();
+  });
+
+  it("reconhece publicação legada pela assinatura exata do commit do app", async () => {
+    const context = await setup();
+    const value = draft(await context.repository.currentCommit(), "aula-legada");
+    const sourcePath = "src/content/aprendizado/aulas/aula-legada.mdx";
+    await writeFile(path.join(context.seed, sourcePath), serializeLesson(value));
+    await requireGit(context.seed, ["add", "--", sourcePath]);
+    await requireGit(context.seed, [
+      "commit",
+      "-m",
+      "content(aula): adiciona aula-legada",
+    ]);
+    await requireGit(context.seed, ["push", "origin", "HEAD:main"]);
+    await context.repository.synchronize(context.remote);
+
+    await expect(context.publisher.deletePublished(sourcePath)).resolves.toMatchObject({
+      pushedTo: "origin/main",
+    });
+    await expect(
+      access(path.join(context.repository.repositoryPath, sourcePath)),
+    ).rejects.toThrow();
   });
 
   it("preserva commit e rascunho quando a main muda após o commit local", async () => {

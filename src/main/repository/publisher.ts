@@ -71,12 +71,6 @@ export class Publisher {
   ): Promise<Readonly<{ commit: string; pushedTo: "origin/main" }>> {
     if (!isAllowedContentPath(sourcePath))
       throw new Error("Só é permitido excluir um MDX de conteúdo do Portal.");
-    const publication = await getPublication(this.directories, sourcePath);
-    if (!publication) {
-      throw new Error(
-        "Exclusão bloqueada: este arquivo não possui registro de criação pelo app.",
-      );
-    }
     await this.repository.ensureClean();
     await requireGit(this.repository.repositoryPath, [
       "fetch",
@@ -97,6 +91,43 @@ export class Publisher {
       throw new Error(
         `Exclusão bloqueada: este conteúdo é usado por ${entry.incomingRelations.join(", ")}.`,
       );
+    let publication = await getPublication(this.directories, sourcePath);
+    if (!publication) {
+      const creationLog = await requireGit(this.repository.repositoryPath, [
+        "log",
+        "--diff-filter=A",
+        "--format=%H%x09%s",
+        "--",
+        sourcePath,
+      ]);
+      const expectedSubject = `content(${entry.type}): adiciona ${entry.slug}`;
+      const legacyCommit = creationLog
+        .split(/\r?\n/)
+        .map((line) => line.split("\t", 2))
+        .find(([, subject]) => subject === expectedSubject)?.[0];
+      if (!legacyCommit) {
+        throw new Error(
+          "Exclusão bloqueada: este arquivo não possui registro ou commit de criação reconhecido pelo app.",
+        );
+      }
+      const rawMdx = await readFile(
+        await resolveConfinedForWrite(this.repository.repositoryPath, sourcePath),
+        "utf8",
+      );
+      const legacyAssetPaths = [
+        ...rawMdx.matchAll(
+          /\/(images\/content\/[a-z0-9_./-]+\.(?:png|jpe?g|webp)|downloads\/aulas\/[a-z0-9_./-]+\.(?:pdf|txt|zip))/gi,
+        ),
+      ].map((match) => `public/${match[1]}`);
+      assertAllowedPaths(legacyAssetPaths);
+      publication = {
+        sourcePath,
+        imagePaths: [...new Set(legacyAssetPaths)],
+        lastCommit: legacyCommit,
+        updatedAt: new Date().toISOString(),
+      };
+      await recordPublication(this.directories, publication);
+    }
     const deletionPaths = [...new Set([sourcePath, ...publication.imagePaths])];
     assertAllowedPaths(deletionPaths);
     const operationId = randomUUID();
