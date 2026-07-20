@@ -10,6 +10,7 @@ import type {
 import { toSlug } from "../shared/slug";
 import { EXPECTED_REMOTE_URL } from "../shared/schema";
 import { DEFAULT_COVER_PATH } from "../shared/content-defaults";
+import { GEAR_LOGO_DATA_URL } from "../shared/brand-assets";
 
 const randomUUID = () => crypto.randomUUID();
 
@@ -1429,7 +1430,7 @@ export function App() {
   return (
     <div className="shell">
       <header className="topbar">
-        <div className="brand-mark">G</div>
+        <img className="brand-logo" src={GEAR_LOGO_DATA_URL} alt="GEAR" />
         <div>
           <strong>GEAR Content Studio</strong>
           <small>
