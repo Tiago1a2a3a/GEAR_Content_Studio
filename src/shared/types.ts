@@ -135,11 +135,17 @@ export type EnvironmentStatus = Readonly<{
   repositoryReady: boolean;
   contractCompatible: boolean;
   currentCommit?: string;
+  autoUpdateReferencesOnDelete: boolean;
 }>;
 
 export type GearContentStudioApi = Readonly<{
   environmentCheck(): Promise<Result<EnvironmentStatus>>;
-  configure(input: Readonly<{ remoteUrl: string }>): Promise<Result<void>>;
+  configure(
+    input: Readonly<{
+      remoteUrl: string;
+      autoUpdateReferencesOnDelete: boolean;
+    }>,
+  ): Promise<Result<void>>;
   synchronize(): Promise<Result<Readonly<{ commit: string; indexedEntries: number }>>>;
   listCatalog(filter?: CatalogFilter): Promise<Result<CatalogEntry[]>>;
   chooseImages(): Promise<Result<PendingImage[]>>;
@@ -159,7 +165,15 @@ export type GearContentStudioApi = Readonly<{
   copyDiagnostic(detailsId: string): Promise<Result<string>>;
   deletePublished(
     input: Readonly<{ sourcePath: string }>,
-  ): Promise<Result<Readonly<{ commit: string; pushedTo: "origin/main" }>>>;
+  ): Promise<
+    Result<
+      Readonly<{
+        commit: string;
+        pushedTo: "origin/main";
+        updatedReferences: string[];
+      }>
+    >
+  >;
 }>;
 
 export const ok = <T>(value: T): Result<T> => ({ ok: true, value });

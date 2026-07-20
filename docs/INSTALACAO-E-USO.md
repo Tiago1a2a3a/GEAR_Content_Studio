@@ -15,12 +15,16 @@ gate adicional.
 
 ## Instalar
 
-1. Execute `GEAR Content Studio Setup 0.3.1.exe`.
+1. Execute `GEAR Content Studio Setup 0.4.0.exe`.
 2. Escolha a pasta de instalação.
 3. Abra **GEAR Content Studio** pelo menu Iniciar ou atalho.
 4. Em **Configurações**, confirme o remoto fixo
    `https://github.com/Tiago1a2a3a/Site_Gear`.
 5. Em **Início**, use **Sincronizar agora**.
+
+Opcionalmente, ative **Atualizar dependências ao excluir**. Assim, ao apagar um
+conteúdo, o app remove seu slug dos outros MDX relacionados e inclui todas as
+alterações no mesmo commit validado.
 
 O clone exclusivo, rascunhos, staging e logs ficam em:
 
@@ -44,10 +48,11 @@ No catálogo, **Editar conteúdo** carrega um MDX publicado. Tipo e slug ficam
 travados para impedir renomeações acidentais, mas status, texto, relações e
 recursos podem ser atualizados pelo mesmo fluxo de revisão.
 
-**Excluir do Portal** exige duas confirmações, bloqueia conteúdos referenciados e
-só funciona para publicações registradas pelo aplicativo. O app confirma o SHA e
-a ausência dos arquivos em `origin/main`; a atualização do site depende do
-workflow de deploy do repositório.
+**Excluir do Portal** exige duas confirmações e só funciona para publicações
+registradas pelo aplicativo. Por padrão, conteúdos referenciados são bloqueados;
+com a atualização automática ativada, aulas, cursos e trilhas dependentes são
+reescritos no mesmo commit. O app confirma o SHA e a ausência dos arquivos em
+`origin/main`; a atualização do site depende do workflow de deploy do repositório.
 
 ## Desinstalar
 

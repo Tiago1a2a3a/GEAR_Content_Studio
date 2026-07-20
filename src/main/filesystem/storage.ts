@@ -52,6 +52,7 @@ export type Settings = Readonly<{
   remoteUrl: string;
   defaultBranch: "main";
   theme: "system";
+  autoUpdateReferencesOnDelete: boolean;
 }>;
 
 export async function loadSettings(
@@ -61,7 +62,11 @@ export async function loadSettings(
     const raw = JSON.parse(await readFile(directories.settings, "utf8")) as Settings;
     remoteUrlSchema.parse(raw.remoteUrl);
     if (raw.defaultBranch !== "main" || raw.schemaVersion !== 1) return undefined;
-    return raw;
+    return {
+      ...raw,
+      autoUpdateReferencesOnDelete:
+        raw.autoUpdateReferencesOnDelete === true,
+    };
   } catch {
     return undefined;
   }
@@ -70,12 +75,14 @@ export async function loadSettings(
 export async function saveSettings(
   directories: AppDirectories,
   remoteUrl: string,
+  autoUpdateReferencesOnDelete = false,
 ): Promise<void> {
   await writeJsonAtomic(directories.settings, {
     schemaVersion: 1,
     remoteUrl: remoteUrlSchema.parse(remoteUrl),
     defaultBranch: "main",
     theme: "system",
+    autoUpdateReferencesOnDelete,
   } satisfies Settings);
 }
 

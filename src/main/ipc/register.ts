@@ -20,10 +20,17 @@ const filterSchema = z
 export function registerIpc(service: AppService): void {
   ipcMain.handle("gear:environment-check", () => service.environmentCheck());
   ipcMain.handle("gear:configure", (_event, input: unknown) => {
-    const remoteUrl = remoteUrlSchema.parse(
-      z.object({ remoteUrl: z.string() }).parse(input).remoteUrl,
-    );
-    return service.configure({ remoteUrl });
+    const parsed = z
+      .object({
+        remoteUrl: z.string(),
+        autoUpdateReferencesOnDelete: z.boolean(),
+      })
+      .parse(input);
+    const remoteUrl = remoteUrlSchema.parse(parsed.remoteUrl);
+    return service.configure({
+      remoteUrl,
+      autoUpdateReferencesOnDelete: parsed.autoUpdateReferencesOnDelete,
+    });
   });
   ipcMain.handle("gear:synchronize", () => service.synchronize());
   ipcMain.handle("gear:list-catalog", (_event, filter: unknown) =>

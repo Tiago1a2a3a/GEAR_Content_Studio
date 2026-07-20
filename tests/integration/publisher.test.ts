@@ -237,13 +237,29 @@ describe("publicação protegida", () => {
       await expect(access(path.join(observer, relativePath))).resolves.toBeUndefined();
     }
 
-    for (const relativePath of [
-      trilhaPath,
-      cursoPath,
-      aulaPath,
-      noticiaPath,
-      projetoPath,
-    ]) {
+    await expect(publisher.deletePublished(aulaPath)).rejects.toThrow(
+      /Exclusão bloqueada/,
+    );
+    const deletedLesson = await publisher.deletePublished(aulaPath, true);
+    expect(new Set(deletedLesson.updatedReferences)).toEqual(
+      new Set([cursoPath, trilhaPath]),
+    );
+    const dependencyObserver = path.join(root, "dependency-observer");
+    await requireGit(root, [
+      "clone",
+      "--branch",
+      "main",
+      remote,
+      dependencyObserver,
+    ]);
+    expect(await readFile(path.join(dependencyObserver, cursoPath), "utf8")).not.toContain(
+      "aula-gpt-teste-001",
+    );
+    expect(await readFile(path.join(dependencyObserver, trilhaPath), "utf8")).not.toContain(
+      "aula-gpt-teste-001",
+    );
+
+    for (const relativePath of [trilhaPath, cursoPath, noticiaPath, projetoPath]) {
       await publisher.deletePublished(relativePath);
     }
   }, 60_000);

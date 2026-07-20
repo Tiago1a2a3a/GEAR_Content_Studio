@@ -10,11 +10,15 @@ confirmações e só exclui conteúdo cuja criação tenha sido registrada pelo 
 
 ## Instalação e uso
 
-O instalador x64 fica em `dist/GEAR Content Studio Setup 0.3.1.exe`. Consulte:
+O instalador x64 fica em `dist/GEAR Content Studio Setup 0.4.0.exe`. Consulte:
 
 - [Instalação e uso](docs/INSTALACAO-E-USO.md)
 - [Segurança e recuperação](docs/SEGURANCA-E-RECUPERACAO.md)
 - [Normalização dos hashes de contrato](docs/ADR-001-HASHES-LF.md)
+
+Em **Configurações**, a opção **Atualizar dependências ao excluir** permite
+remover automaticamente referências ao conteúdo excluído em aulas, cursos e
+trilhas. As alterações são validadas e publicadas no mesmo commit da exclusão.
 
 ## Desenvolvimento
 

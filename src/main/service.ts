@@ -102,11 +102,18 @@ export class AppService implements GearContentStudioApi {
         repositoryReady,
         contractCompatible,
         currentCommit,
+        autoUpdateReferencesOnDelete:
+          settings?.autoUpdateReferencesOnDelete ?? false,
       };
     });
   }
 
-  async configure(input: Readonly<{ remoteUrl: string }>): Promise<Result<void>> {
+  async configure(
+    input: Readonly<{
+      remoteUrl: string;
+      autoUpdateReferencesOnDelete: boolean;
+    }>,
+  ): Promise<Result<void>> {
     return this.wrap("CONFIGURE", async () => {
       const remoteUrl = remoteUrlSchema.parse(input.remoteUrl);
       const current = await loadSettings(this.directories);
@@ -119,7 +126,11 @@ export class AppService implements GearContentStudioApi {
           "Para trocar o remoto, recrie explicitamente o clone gerenciado primeiro.",
         );
       }
-      await saveSettings(this.directories, remoteUrl);
+      await saveSettings(
+        this.directories,
+        remoteUrl,
+        input.autoUpdateReferencesOnDelete,
+      );
     });
   }
 
@@ -232,7 +243,12 @@ export class AppService implements GearContentStudioApi {
 
   async deletePublished(input: Readonly<{ sourcePath: string }>) {
     return this.wrap("DELETE_PUBLISHED", () =>
-      this.#publisher.deletePublished(input.sourcePath),
+      loadSettings(this.directories).then((settings) =>
+        this.#publisher.deletePublished(
+          input.sourcePath,
+          settings?.autoUpdateReferencesOnDelete ?? false,
+        ),
+      ),
     );
   }
 

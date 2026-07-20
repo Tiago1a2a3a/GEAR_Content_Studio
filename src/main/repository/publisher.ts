@@ -10,6 +10,7 @@ import {
   resolveConfinedForWrite,
 } from "../../shared/paths";
 import { serializeLesson } from "../../shared/serializer";
+import { removeContentReference } from "../../shared/reference-rewriter";
 import type {
   LessonDraft,
   PublishBundle,
@@ -68,7 +69,14 @@ export class Publisher {
 
   async deletePublished(
     sourcePath: string,
-  ): Promise<Readonly<{ commit: string; pushedTo: "origin/main" }>> {
+    autoUpdateReferences = false,
+  ): Promise<
+    Readonly<{
+      commit: string;
+      pushedTo: "origin/main";
+      updatedReferences: string[];
+    }>
+  > {
     if (!isAllowedContentPath(sourcePath))
       throw new Error("Só é permitido excluir um MDX de conteúdo do Portal.");
     await this.repository.ensureClean();
@@ -83,14 +91,19 @@ export class Publisher {
     ) {
       throw new Error("A main local está desatualizada. Sincronize antes de excluir.");
     }
-    const entry = (await this.repository.catalog(true)).find(
+    const catalog = await this.repository.catalog(true);
+    const entry = catalog.find(
       (item) => item.sourcePath === sourcePath,
     );
     if (!entry) throw new Error("Conteúdo não encontrado no catálogo.");
-    if (entry.incomingRelations.length)
+    if (entry.incomingRelations.length && !autoUpdateReferences)
       throw new Error(
-        `Exclusão bloqueada: este conteúdo é usado por ${entry.incomingRelations.join(", ")}.`,
+        `Exclusão bloqueada: este conteúdo é usado por ${entry.incomingRelations.join(", ")}. Ative a atualização automática de dependências nas Configurações para remover essas referências no mesmo commit.`,
       );
+    const incoming = new Set(entry.incomingRelations);
+    const dependentEntries = catalog.filter((candidate) =>
+      incoming.has(`${candidate.type}:${candidate.slug}`),
+    );
     let publication = await getPublication(this.directories, sourcePath);
     if (!publication) {
       const creationLog = await requireGit(this.repository.repositoryPath, [
@@ -129,11 +142,29 @@ export class Publisher {
       await recordPublication(this.directories, publication);
     }
     const deletionPaths = [...new Set([sourcePath, ...publication.imagePaths])];
-    assertAllowedPaths(deletionPaths);
+    const referencePaths = dependentEntries.map((candidate) => candidate.sourcePath);
+    const changedPaths = [...new Set([...deletionPaths, ...referencePaths])];
+    assertAllowedPaths(changedPaths);
     const operationId = randomUUID();
     await this.#lock.acquire(operationId);
     let committed = false;
     try {
+      const updatedReferences: string[] = [];
+      for (const dependent of dependentEntries) {
+        const dependentPath = await resolveConfinedForWrite(
+          this.repository.repositoryPath,
+          dependent.sourcePath,
+        );
+        const original = await readFile(dependentPath, "utf8");
+        const updated = removeContentReference(original, entry.slug);
+        if (!updated.changed) {
+          throw new Error(
+            `Não foi possível remover a referência em ${dependent.sourcePath}.`,
+          );
+        }
+        await writeFile(dependentPath, updated.mdx, "utf8");
+        updatedReferences.push(dependent.sourcePath);
+      }
       for (const relativePath of deletionPaths) {
         await rm(
           await resolveConfinedForWrite(this.repository.repositoryPath, relativePath),
@@ -145,7 +176,7 @@ export class Publisher {
         "add",
         "-A",
         "--",
-        ...deletionPaths,
+        ...changedPaths,
       ]);
       const stagedPaths = (
         await requireGit(this.repository.repositoryPath, [
@@ -157,7 +188,7 @@ export class Publisher {
       )
         .split("\0")
         .filter(Boolean);
-      assertExactPaths(stagedPaths, deletionPaths, "stage de exclusão");
+      assertExactPaths(stagedPaths, changedPaths, "stage de exclusão");
       const commitMessage = `content(${entry.type}): remove ${entry.slug}`;
       await requireGit(this.repository.repositoryPath, ["commit", "-m", commitMessage]);
       committed = true;
@@ -186,7 +217,7 @@ export class Publisher {
       }
       await removePublication(this.directories, sourcePath);
       await this.repository.catalog(true);
-      return { commit, pushedTo: "origin/main" };
+      return { commit, pushedTo: "origin/main", updatedReferences };
     } catch (error) {
       if (!committed) {
         await requireGit(this.repository.repositoryPath, [
@@ -195,7 +226,7 @@ export class Publisher {
           "--staged",
           "--worktree",
           "--",
-          ...deletionPaths,
+          ...changedPaths,
         ]).catch(() => undefined);
       }
       throw error;

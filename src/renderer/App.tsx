@@ -1383,6 +1383,8 @@ export function App() {
   const [drafts, setDrafts] = useState<LessonDraft[]>([]);
   const [activeDraft, setActiveDraft] = useState<LessonDraft>();
   const [remoteUrl, setRemoteUrl] = useState(EXPECTED_REMOTE_URL);
+  const [autoUpdateReferencesOnDelete, setAutoUpdateReferencesOnDelete] =
+    useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1393,7 +1395,12 @@ export function App() {
       window.gearContentStudio.listCatalog(),
       window.gearContentStudio.listDrafts(),
     ]);
-    if (environmentResult.ok) setEnvironment(environmentResult.value);
+    if (environmentResult.ok) {
+      setEnvironment(environmentResult.value);
+      setAutoUpdateReferencesOnDelete(
+        environmentResult.value.autoUpdateReferencesOnDelete,
+      );
+    }
     if (catalogResult.ok) setCatalog(catalogResult.value);
     if (draftsResult.ok) {
       setDrafts((current) => {
@@ -1530,7 +1537,9 @@ export function App() {
                 return false;
               if (
                 !window.confirm(
-                  `Confirma novamente a exclusão de ${entry.slug}? Dependências existentes bloquearão a operação.`,
+                  environment?.autoUpdateReferencesOnDelete
+                    ? `Confirma novamente a exclusão de ${entry.slug}? As referências em outros conteúdos serão removidas automaticamente no mesmo commit.`
+                    : `Confirma novamente a exclusão de ${entry.slug}? Dependências existentes bloquearão a operação.`,
                 )
               )
                 return false;
@@ -1549,8 +1558,9 @@ export function App() {
                   ),
                 );
                 setError("");
+                const updatedCount = result.value.updatedReferences.length;
                 setNotice(
-                  `Exclusão confirmada em origin/main (${result.value.commit.slice(0, 8)}). O site será atualizado pelo deploy do Portal.`,
+                  `Exclusão confirmada em origin/main (${result.value.commit.slice(0, 8)}).${updatedCount ? ` ${updatedCount} conteúdo(s) dependente(s) também foram atualizados.` : ""} O site será atualizado pelo deploy do Portal.`,
                 );
                 await refresh();
                 return true;
@@ -1641,11 +1651,30 @@ export function App() {
                 onChange={(event) => setRemoteUrl(event.target.value)}
               />
             </label>
+            <label className="setting-option">
+              <input
+                type="checkbox"
+                checked={autoUpdateReferencesOnDelete}
+                onChange={(event) =>
+                  setAutoUpdateReferencesOnDelete(event.target.checked)
+                }
+              />
+              <span>
+                <strong>Atualizar dependências ao excluir</strong>
+                <small>
+                  Remove automaticamente o slug de aulas, cursos e trilhas que
+                  dependem do conteúdo excluído, tudo no mesmo commit.
+                </small>
+              </span>
+            </label>
             <button
               className="primary"
               onClick={async () => {
                 setBusy(true);
-                const result = await window.gearContentStudio.configure({ remoteUrl });
+                const result = await window.gearContentStudio.configure({
+                  remoteUrl,
+                  autoUpdateReferencesOnDelete,
+                });
                 setBusy(false);
                 if (!result.ok) return setError(result.error.message);
                 await refresh();
