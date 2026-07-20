@@ -194,6 +194,10 @@ export class AppService implements GearContentStudioApi {
     return this.wrap("COPY_DIAGNOSTIC", () => this.#logger.diagnostic(detailsId));
   }
 
+  async deletePublished(input: Readonly<{ sourcePath: string }>) {
+    return this.wrap("DELETE_PUBLISHED", () => this.#publisher.deletePublished(input.sourcePath));
+  }
+
   private async wrap<T>(event: string, action: () => Promise<T>): Promise<Result<T>> {
     try {
       return ok(await action());

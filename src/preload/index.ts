@@ -20,6 +20,7 @@ const api: GearContentStudioApi = {
     ipcRenderer.invoke("gear:cancel-operation", operationId),
   openExternalHttps: (url) => ipcRenderer.invoke("gear:open-external", url),
   copyDiagnostic: (detailsId) => ipcRenderer.invoke("gear:copy-diagnostic", detailsId),
+  deletePublished: (input) => ipcRenderer.invoke("gear:delete-published", input),
 };
 
 contextBridge.exposeInMainWorld("gearContentStudio", Object.freeze(api));

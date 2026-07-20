@@ -89,6 +89,7 @@ export const lessonDraftSchema = z.object({
   permiteComentarios: z.boolean(),
   images: z.array(pendingImageSchema),
   body: z.array(contentBlockSchema).min(1, "Adicione conteúdo à Aula."),
+  contentType: z.enum(["aula", "curso", "trilha", "projeto", "noticia"]).default("aula"),
 });
 
 const localContentBlockSchema = z.discriminatedUnion("kind", [

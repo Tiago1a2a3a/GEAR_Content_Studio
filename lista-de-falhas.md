@@ -71,6 +71,21 @@ Use este arquivo para registrar problemas encontrados durante os testes do MVP.
 - **Impacto desejado:** tornar a edição de Aulas mais rápida e intuitiva.
 - **Status:** sugestão para etapa futura
 
+## Mudanças de escopo solicitadas
+
+### ESCOPO-001 — Criar todos os tipos de conteúdo MDX
+
+- **Solicitação:** Permitir criar Aula, Curso, Trilha, Projeto e Notícia pela interface.
+- **Escopo atual:** O MVP publicado permite criar somente Aula.
+- **Status:** aguardando confirmação de ampliação do escopo.
+
+### ESCOPO-002 — Excluir conteúdo MDX publicado
+
+- **Solicitação:** Permitir excluir do Git um conteúdo MDX que já foi publicado.
+- **Risco:** a exclusão pode quebrar referências em Cursos, Trilhas ou outros conteúdos.
+- **Regra recomendada:** permitir somente arquivos criados pelo app, exigir duas confirmações e bloquear a exclusão quando houver dependências.
+- **Status:** aguardando confirmação da regra de segurança.
+
 ### FALHA-003 — Formatação visual ruim nos cards do catálogo
 
 - **Título:** O card do catálogo apresenta quebras e relações com formatação inadequada.

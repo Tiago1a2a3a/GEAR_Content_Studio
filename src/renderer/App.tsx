@@ -35,6 +35,7 @@ function createDraft(baseCommit = ""): LessonDraft {
     permiteComentarios: false,
     images: [],
     body: [{ id: randomUUID(), kind: "paragraph", markdown: "" }],
+    contentType: "aula",
   };
 }
 
@@ -126,7 +127,7 @@ function Home({
   );
 }
 
-function Catalog({ entries }: { entries: CatalogEntry[] }) {
+function Catalog({ entries, onDelete }: { entries: CatalogEntry[]; onDelete(entry: CatalogEntry): void }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
   const [selected, setSelected] = useState<CatalogEntry>();
@@ -227,6 +228,7 @@ function Catalog({ entries }: { entries: CatalogEntry[] }) {
                   )}
                 </dd>
               </dl>
+              <button className="danger" onClick={() => onDelete(selected)}>Excluir publicado</button>
             </>
           ) : (
             <div className="empty">Selecione um conteúdo para ver detalhes.</div>
@@ -505,7 +507,7 @@ function LessonEditor({
     <section>
       <div className="section-heading">
         <div>
-          <span className="eyebrow">Nova Aula • etapa {step} de 4</span>
+          <span className="eyebrow">Novo conteúdo • etapa {step} de 4</span>
           <h1>
             {
               ["Informações", "Conteúdo", "Recursos e relações", "Revisar e publicar"][
@@ -530,6 +532,16 @@ function LessonEditor({
       </div>
       {step === 1 && (
         <div className="form-grid">
+          <label>
+            Tipo de conteúdo
+            <select value={draft.contentType} onChange={(event) => set("contentType", event.target.value as LessonDraft["contentType"])}>
+              <option value="aula">Aula</option>
+              <option value="curso">Curso</option>
+              <option value="trilha">Trilha</option>
+              <option value="noticia">Notícia</option>
+              <option value="projeto">Projeto</option>
+            </select>
+          </label>
           <label className="wide">
             Título
             <input
@@ -950,7 +962,16 @@ export function App() {
             busy={busy}
           />
         )}
-        {screen === "catalogo" && <Catalog entries={catalog} />}
+        {screen === "catalogo" && <Catalog entries={catalog} onDelete={async (entry) => {
+          if (!window.confirm(`Excluir ${entry.sourcePath}? Esta ação removerá o MDX do GitHub.`)) return;
+          if (!window.confirm(`Confirma novamente a exclusão de ${entry.slug}? Dependências existentes bloquearão a operação.`)) return;
+          setBusy(true);
+          const result = await window.gearContentStudio.deletePublished({ sourcePath: entry.sourcePath });
+          setBusy(false);
+          if (!result.ok) return setError(`${result.error.title}: ${result.error.message}`);
+          setError("");
+          await refresh();
+        }} />}
         {screen === "nova-aula" && activeDraft && (
           <LessonEditor
             key={activeDraft.id}

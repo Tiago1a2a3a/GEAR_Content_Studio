@@ -1,13 +1,17 @@
 import path from "node:path";
 import { realpath } from "node:fs/promises";
 
-const lessonPath = /^src\/content\/aprendizado\/aulas\/[a-z0-9]+(?:-[a-z0-9]+)*\.mdx$/;
+const contentPath = /^src\/content\/(?:aprendizado\/(?:aulas|cursos|trilhas)|projetos|noticias)\/[a-z0-9]+(?:-[a-z0-9]+)*\.mdx$/;
 const imagePath =
-  /^public\/images\/content\/aulas\/[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*\.(png|jpg|jpeg|webp)$/;
+  /^public\/images\/content\/(?:aulas|aprendizado\/(?:cursos|trilhas)|projetos|noticias)\/[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z0-9]+(?:-[a-z0-9]+)*\.(png|jpg|jpeg|webp)$/;
 
 export function isAllowedWritePath(relativePath: string): boolean {
   const normalized = relativePath.replaceAll("\\", "/");
-  return lessonPath.test(normalized) || imagePath.test(normalized);
+  return contentPath.test(normalized) || imagePath.test(normalized);
+}
+
+export function isAllowedContentPath(relativePath: string): boolean {
+  return contentPath.test(relativePath.replaceAll("\\", "/"));
 }
 
 export function resolveConfined(root: string, relativePath: string): string {

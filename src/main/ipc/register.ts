@@ -58,4 +58,7 @@ export function registerIpc(service: AppService): void {
   ipcMain.handle("gear:copy-diagnostic", (_event, detailsId: unknown) =>
     service.copyDiagnostic(idSchema.parse(detailsId)),
   );
+  ipcMain.handle("gear:delete-published", (_event, input: unknown) =>
+    service.deletePublished(z.object({ sourcePath: z.string().max(300) }).parse(input)),
+  );
 }

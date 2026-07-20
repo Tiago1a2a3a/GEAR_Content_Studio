@@ -2,6 +2,8 @@ import { stringify } from "yaml";
 
 import type { ContentBlock, LessonDraft } from "./types";
 
+const contentDirectories = { aula: "aprendizado/aulas", curso: "aprendizado/cursos", trilha: "aprendizado/trilhas", projeto: "projetos", noticia: "noticias" } as const;
+
 const unsafeBody = [
   /^\s*import\s/m,
   /^\s*export\s/m,
@@ -26,7 +28,8 @@ function blockToMdx(block: ContentBlock, draft: LessonDraft): string {
     case "image": {
       const image = draft.images.find((candidate) => candidate.id === block.imageId);
       if (!image) throw new Error(`Imagem não encontrada: ${block.imageId}`);
-      return `![${block.alt.trim()}](/images/content/aulas/${draft.slug}/${image.normalizedName})`;
+      const imageDirectory = draft.contentType === "aula" || !draft.contentType ? "aulas" : contentDirectories[draft.contentType];
+      return `![${block.alt.trim()}](/images/content/${imageDirectory}/${draft.slug}/${image.normalizedName})`;
     }
     case "code":
       return `\`\`\`${block.language.trim()}\n${block.code.replace(/\s+$/, "")}\n\`\`\``;
@@ -87,6 +90,24 @@ export function serializeLesson(draft: LessonDraft): string {
   if (draft.repositorioGithub) frontmatter.repositorioGithub = draft.repositorioGithub;
   frontmatter.status = draft.status;
   frontmatter.permiteComentarios = draft.permiteComentarios;
+  if (draft.contentType === "curso") {
+    frontmatter.descricao = draft.resumo.trim();
+    frontmatter.imagemCapa = banner ? banner.normalizedName : "";
+    frontmatter.aulaSlugs = draft.preRequisitos;
+  } else if (draft.contentType === "trilha") {
+    frontmatter.descricaoCurta = draft.resumo.trim();
+    frontmatter.imagemCapa = banner ? banner.normalizedName : "";
+    frontmatter.area = draft.categoria ?? "geral";
+    frontmatter.ordem = 1;
+    frontmatter.itens = draft.preRequisitos;
+  } else if (draft.contentType === "projeto") {
+    frontmatter.descricaoCurta = draft.resumo.trim();
+    delete frontmatter.status;
+    frontmatter.status = draft.status === "publicado" ? "concluído" : "em andamento";
+  } else if (draft.contentType === "noticia") {
+    frontmatter.imagemCapa = banner ? banner.normalizedName : "";
+    frontmatter.autor = draft.autores[0] ?? "GEAR";
+  }
 
   const yaml = stringify(frontmatter, {
     lineWidth: 0,
