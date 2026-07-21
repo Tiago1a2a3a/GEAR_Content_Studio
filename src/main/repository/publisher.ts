@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import matter from "gray-matter";
 
 import portalLockJson from "../../../resources/contracts/portal-contract-lock.json";
 import {
@@ -11,10 +12,14 @@ import {
 } from "../../shared/paths";
 import { serializeLesson } from "../../shared/serializer";
 import { removeContentReference } from "../../shared/reference-rewriter";
+import { normalizeTag, rewriteTags } from "../../shared/tag-collection";
 import type {
+  CatalogEntry,
   LessonDraft,
   PublishBundle,
   ReviewBundle,
+  TagCollectionEntry,
+  TagMutationResult,
   ValidationIssue,
 } from "../../shared/types";
 import { validateDraft } from "../../shared/validation";
@@ -92,9 +97,7 @@ export class Publisher {
       throw new Error("A main local está desatualizada. Sincronize antes de excluir.");
     }
     const catalog = await this.repository.catalog(true);
-    const entry = catalog.find(
-      (item) => item.sourcePath === sourcePath,
-    );
+    const entry = catalog.find((item) => item.sourcePath === sourcePath);
     if (!entry) throw new Error("Conteúdo não encontrado no catálogo.");
     if (entry.incomingRelations.length && !autoUpdateReferences)
       throw new Error(
@@ -106,23 +109,6 @@ export class Publisher {
     );
     let publication = await getPublication(this.directories, sourcePath);
     if (!publication) {
-      const creationLog = await requireGit(this.repository.repositoryPath, [
-        "log",
-        "--diff-filter=A",
-        "--format=%H%x09%s",
-        "--",
-        sourcePath,
-      ]);
-      const expectedSubject = `content(${entry.type}): adiciona ${entry.slug}`;
-      const legacyCommit = creationLog
-        .split(/\r?\n/)
-        .map((line) => line.split("\t", 2))
-        .find(([, subject]) => subject === expectedSubject)?.[0];
-      if (!legacyCommit) {
-        throw new Error(
-          "Exclusão bloqueada: este arquivo não possui registro ou commit de criação reconhecido pelo app.",
-        );
-      }
       const rawMdx = await readFile(
         await resolveConfinedForWrite(this.repository.repositoryPath, sourcePath),
         "utf8",
@@ -136,7 +122,7 @@ export class Publisher {
       publication = {
         sourcePath,
         imagePaths: [...new Set(legacyAssetPaths)],
-        lastCommit: legacyCommit,
+        lastCommit: await this.repository.currentCommit(),
         updatedAt: new Date().toISOString(),
       };
       await recordPublication(this.directories, publication);
@@ -218,6 +204,163 @@ export class Publisher {
       await removePublication(this.directories, sourcePath);
       await this.repository.catalog(true);
       return { commit, pushedTo: "origin/main", updatedReferences };
+    } catch (error) {
+      if (!committed) {
+        await requireGit(this.repository.repositoryPath, [
+          "restore",
+          "--source=HEAD",
+          "--staged",
+          "--worktree",
+          "--",
+          ...changedPaths,
+        ]).catch(() => undefined);
+      }
+      throw error;
+    } finally {
+      await this.#lock.release(operationId);
+    }
+  }
+
+  async listTags(): Promise<TagCollectionEntry[]> {
+    return buildTagCollection(await this.repository.catalog(true));
+  }
+
+  async updateTag(
+    input: Readonly<{
+      tag: string;
+      replacement?: string;
+      sourcePath?: string;
+      enabled?: boolean;
+    }>,
+  ): Promise<TagMutationResult> {
+    const tag = input.tag.trim();
+    const replacement = input.replacement?.trim();
+    const isMembershipUpdate = Boolean(input.sourcePath);
+    if (!tag) throw new Error("Informe a tag que será alterada.");
+    if (isMembershipUpdate && typeof input.enabled !== "boolean") {
+      throw new Error("Informe se a tag deve ser adicionada ou removida.");
+    }
+    if (input.replacement !== undefined && !replacement) {
+      throw new Error("A nova tag não pode ficar vazia.");
+    }
+    if (
+      !isMembershipUpdate &&
+      replacement &&
+      normalizeTag(tag) === normalizeTag(replacement)
+    ) {
+      throw new Error("A nova tag precisa ser diferente da atual.");
+    }
+
+    await this.repository.ensureClean();
+    await requireGit(this.repository.repositoryPath, [
+      "fetch",
+      "--prune",
+      "origin",
+      "main",
+    ]);
+    const baseCommit = await this.repository.currentCommit();
+    if (baseCommit !== (await this.repository.remoteCommit())) {
+      throw new Error(
+        "A main local está desatualizada. Sincronize antes de alterar tags.",
+      );
+    }
+
+    const catalog = await this.repository.catalog(true);
+    const affectedEntries = isMembershipUpdate
+      ? catalog.filter((entry) => entry.sourcePath === input.sourcePath)
+      : catalog.filter((entry) =>
+          entry.tags.some((current) => normalizeTag(current) === normalizeTag(tag)),
+        );
+    if (!affectedEntries.length)
+      throw new Error(
+        isMembershipUpdate
+          ? "Conteúdo não encontrado no catálogo."
+          : "A tag não foi encontrada no catálogo.",
+      );
+    if (isMembershipUpdate && affectedEntries[0]?.type === "trilha") {
+      throw new Error("Trilhas não possuem tags nem tecnologias no schema do Portal.");
+    }
+    const changedPaths = affectedEntries.map((entry) => entry.sourcePath);
+    assertAllowedPaths(changedPaths);
+
+    const operationId = randomUUID();
+    await this.#lock.acquire(operationId);
+    let committed = false;
+    try {
+      for (const entry of affectedEntries) {
+        const filePath = await resolveConfinedForWrite(
+          this.repository.repositoryPath,
+          entry.sourcePath,
+        );
+        const original = await readFile(filePath, "utf8");
+        const parsed = matter(original);
+        const tagField =
+          entry.tagField ?? (entry.type === "projeto" ? "tecnologias" : "tags");
+        const existingTags = Array.isArray(parsed.data[tagField])
+          ? parsed.data[tagField].filter(
+              (current): current is string => typeof current === "string",
+            )
+          : [];
+        const tags = isMembershipUpdate
+          ? input.enabled
+            ? rewriteTags([...existingTags, tag], tag, tag)
+            : rewriteTags(existingTags, tag)
+          : rewriteTags(existingTags, tag, replacement);
+        await writeFile(
+          filePath,
+          matter.stringify(parsed.content, { ...parsed.data, [tagField]: tags }),
+          "utf8",
+        );
+      }
+
+      await this.repository.validatePortalCommand();
+      await requireGit(this.repository.repositoryPath, ["add", "--", ...changedPaths]);
+      const stagedPaths = (
+        await requireGit(this.repository.repositoryPath, [
+          "diff",
+          "--cached",
+          "--name-only",
+          "-z",
+        ])
+      )
+        .split("\0")
+        .filter(Boolean);
+      assertExactPaths(stagedPaths, changedPaths, "stage da coleção de tags");
+      const commitMessage = isMembershipUpdate
+        ? input.enabled
+          ? `content(tags): adiciona ${tag}`
+          : `content(tags): remove ${tag}`
+        : replacement
+          ? `content(tags): renomeia ${tag} para ${replacement}`
+          : `content(tags): remove ${tag}`;
+      await requireGit(this.repository.repositoryPath, ["commit", "-m", commitMessage]);
+      committed = true;
+      await requireGit(this.repository.repositoryPath, [
+        "fetch",
+        "--prune",
+        "origin",
+        "main",
+      ]);
+      if ((await this.repository.remoteCommit()) !== baseCommit) {
+        throw new Error(
+          "A main remota mudou após o commit. O commit local foi preservado e não foi enviado.",
+        );
+      }
+      await requireGit(this.repository.repositoryPath, ["push", "origin", "HEAD:main"]);
+      const commit = await this.repository.currentCommit();
+      await requireGit(this.repository.repositoryPath, [
+        "fetch",
+        "--prune",
+        "origin",
+        "main",
+      ]);
+      if ((await this.repository.remoteCommit()) !== commit) {
+        throw new Error(
+          "O push da alteração de tags não foi confirmado em origin/main.",
+        );
+      }
+      await this.repository.catalog(true);
+      return { commit, pushedTo: "origin/main", updatedPaths: changedPaths };
     } catch (error) {
       if (!committed) {
         await requireGit(this.repository.repositoryPath, [
@@ -693,4 +836,38 @@ function assertExactPaths(
   ) {
     throw new Error(`O ${label} não corresponde exatamente aos arquivos aprovados.`);
   }
+}
+
+function buildTagCollection(entries: readonly CatalogEntry[]): TagCollectionEntry[] {
+  const collection = new Map<
+    string,
+    { tag: string; contentPaths: string[]; types: Set<CatalogEntry["type"]> }
+  >();
+  for (const entry of entries) {
+    for (const rawTag of entry.tags) {
+      const tag = rawTag.trim();
+      const key = normalizeTag(tag);
+      if (!key) continue;
+      const current = collection.get(key) ?? {
+        tag,
+        contentPaths: [],
+        types: new Set<CatalogEntry["type"]>(),
+      };
+      if (!current.contentPaths.includes(entry.sourcePath)) {
+        current.contentPaths.push(entry.sourcePath);
+      }
+      current.types.add(entry.type);
+      collection.set(key, current);
+    }
+  }
+  return [...collection.values()]
+    .map((entry) => ({
+      tag: entry.tag,
+      usages: entry.contentPaths.length,
+      contentPaths: entry.contentPaths.sort(),
+      types: [...entry.types].sort(),
+    }))
+    .sort((first, second) =>
+      first.tag.localeCompare(second.tag, "pt-BR", { sensitivity: "base" }),
+    );
 }

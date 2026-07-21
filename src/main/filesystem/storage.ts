@@ -1,7 +1,11 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import type { LessonDraft } from "../../shared/types";
+import {
+  DEFAULT_SIDEBAR_ORDER,
+  type LessonDraft,
+  type SidebarItemId,
+} from "../../shared/types";
 import { localDraftSchema, remoteUrlSchema } from "../../shared/schema";
 import { resolveConfined } from "../../shared/paths";
 
@@ -53,7 +57,25 @@ export type Settings = Readonly<{
   defaultBranch: "main";
   theme: "system";
   autoUpdateReferencesOnDelete: boolean;
+  advancedMode: boolean;
+  sidebarOrder: SidebarItemId[];
 }>;
+
+const normalizeSidebarOrder = (value: unknown): SidebarItemId[] => {
+  if (
+    !Array.isArray(value) ||
+    value.length !== DEFAULT_SIDEBAR_ORDER.length ||
+    value.some(
+      (item) =>
+        typeof item !== "string" ||
+        !DEFAULT_SIDEBAR_ORDER.includes(item as SidebarItemId),
+    ) ||
+    new Set(value).size !== DEFAULT_SIDEBAR_ORDER.length
+  ) {
+    return [...DEFAULT_SIDEBAR_ORDER];
+  }
+  return value as SidebarItemId[];
+};
 
 export async function loadSettings(
   directories: AppDirectories,
@@ -64,8 +86,9 @@ export async function loadSettings(
     if (raw.defaultBranch !== "main" || raw.schemaVersion !== 1) return undefined;
     return {
       ...raw,
-      autoUpdateReferencesOnDelete:
-        raw.autoUpdateReferencesOnDelete === true,
+      autoUpdateReferencesOnDelete: raw.autoUpdateReferencesOnDelete === true,
+      advancedMode: raw.advancedMode === true,
+      sidebarOrder: normalizeSidebarOrder(raw.sidebarOrder),
     };
   } catch {
     return undefined;
@@ -76,6 +99,8 @@ export async function saveSettings(
   directories: AppDirectories,
   remoteUrl: string,
   autoUpdateReferencesOnDelete = false,
+  advancedMode = false,
+  sidebarOrder: SidebarItemId[] = [...DEFAULT_SIDEBAR_ORDER],
 ): Promise<void> {
   await writeJsonAtomic(directories.settings, {
     schemaVersion: 1,
@@ -83,6 +108,8 @@ export async function saveSettings(
     defaultBranch: "main",
     theme: "system",
     autoUpdateReferencesOnDelete,
+    advancedMode,
+    sidebarOrder: normalizeSidebarOrder(sidebarOrder),
   } satisfies Settings);
 }
 

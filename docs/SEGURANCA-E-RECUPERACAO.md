@@ -7,8 +7,7 @@
 - argumentos Git são separados e executados com `shell: false`;
 - remoto e branch estão limitados ao Portal aprovado e a `main`;
 - escrita limitada aos cinco tipos de conteúdo previstos e aos seus recursos;
-- exclusão limitada a publicações registradas pelo próprio aplicativo ou a
-  conteúdos legados com a assinatura exata de commit gerada pela versão 0.1.0;
+- exclusão limitada aos caminhos de conteúdo permitidos do Portal;
 - caminhos são confinados e junctions/symlinks externos são rejeitados;
 - preview estrutural não executa MDX;
 - contrato congelado é conferido antes da escrita;

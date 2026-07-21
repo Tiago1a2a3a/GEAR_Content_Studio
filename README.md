@@ -6,7 +6,7 @@ GEAR, com validação, preview, diff e publicação Git segura.
 O MVP não incorpora IA generativa. Ele opera somente sobre o clone gerenciado do
 repositório aprovado `https://github.com/Tiago1a2a3a/Site_Gear`. Cria e edita
 Aulas, Cursos, Trilhas, Projetos e Notícias; publica em `origin/main` após duas
-confirmações e só exclui conteúdo cuja criação tenha sido registrada pelo app.
+confirmações e só exclui arquivos de conteúdo permitidos pelo contrato do Portal.
 
 ## Instalação e uso
 

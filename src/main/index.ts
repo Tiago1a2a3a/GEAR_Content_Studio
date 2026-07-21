@@ -3,7 +3,9 @@ import path from "node:path";
 import { app, BrowserWindow, session } from "electron";
 
 import { createDirectories } from "./filesystem/storage";
+import { loadSettings } from "./filesystem/storage";
 import { registerIpc } from "./ipc/register";
+import { setAdvancedApplicationMenu } from "./menu";
 import { AppService } from "./service";
 
 let mainWindow: BrowserWindow | undefined;
@@ -22,6 +24,8 @@ configureLocalUserData();
 
 async function createWindow(): Promise<void> {
   const directories = createDirectories(app.getPath("userData"));
+  const settings = await loadSettings(directories);
+  setAdvancedApplicationMenu(settings?.advancedMode === true);
   const service = new AppService(directories);
   await service.initialize();
   registerIpc(service);

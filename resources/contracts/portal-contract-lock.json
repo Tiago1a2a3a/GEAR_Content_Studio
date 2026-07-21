@@ -1,9 +1,9 @@
 {
   "lockVersion": 1,
-  "portalCommit": "e98921546f3ae4f33f35b7a6217fe700e87ca2b7",
+  "portalCommit": "d00f3a194411cdfc5dc3ee1415f47b545296d1bc",
   "files": {
     "content.schemas.ts": {
-      "sha256": "0c09af7693ac06ad2826b641013f276fda520df12b41c89fb94dc8730d399f93"
+      "sha256": "9a7a66909bcb9916331a5415cfcfb23a6fe922979b01da0c32466c8acf60cdd7"
     },
     "content.validation.ts": {
       "sha256": "be77d7053be2f1cee2fb66f873a23f8d253c7ce8c7c15b16d5bc890356316a0b"

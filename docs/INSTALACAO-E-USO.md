@@ -49,7 +49,7 @@ travados para impedir renomeações acidentais, mas status, texto, relações e
 recursos podem ser atualizados pelo mesmo fluxo de revisão.
 
 **Excluir do Portal** exige duas confirmações e só funciona para publicações
-registradas pelo aplicativo. Por padrão, conteúdos referenciados são bloqueados;
+permitidas pelo contrato do Portal. Por padrão, conteúdos referenciados são bloqueados;
 com a atualização automática ativada, aulas, cursos e trilhas dependentes são
 reescritos no mesmo commit. O app confirma o SHA e a ausência dos arquivos em
 `origin/main`; a atualização do site depende do workflow de deploy do repositório.

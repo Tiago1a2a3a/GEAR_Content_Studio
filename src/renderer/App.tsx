@@ -6,17 +6,61 @@ import type {
   LessonDraft,
   PublishBundle,
   ReviewBundle,
+  SidebarItemId,
+  TagCollectionEntry,
 } from "../shared/types";
+import { DEFAULT_SIDEBAR_ORDER } from "../shared/types";
 import { toSlug } from "../shared/slug";
 import { EXPECTED_REMOTE_URL } from "../shared/schema";
 import { DEFAULT_COVER_PATH } from "../shared/content-defaults";
-import { GEAR_LOGO_DATA_URL } from "../shared/brand-assets";
+import { GEAR_LOGO_COMPACT_DATA_URL } from "../shared/brand-assets";
+import { normalizeTag } from "../shared/tag-collection";
 
 const randomUUID = () => crypto.randomUUID();
 
-type Screen = "inicio" | "catalogo" | "nova-aula" | "rascunhos" | "configuracao";
+type Screen = SidebarItemId;
+
+const sidebarLabels: Record<SidebarItemId, string> = {
+  inicio: "Início",
+  catalogo: "Catálogo",
+  "nova-aula": "Novo conteúdo",
+  rascunhos: "Rascunhos",
+  tags: "Coleção • Tags",
+  configuracao: "Configurações",
+};
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+const statusesFor = (entries: readonly CatalogEntry[], type = ""): string[] =>
+  [
+    ...new Set(
+      entries
+        .filter((entry) => !type || entry.type === type)
+        .map((entry) => entry.status),
+    ),
+  ].sort((first, second) =>
+    first.localeCompare(second, "pt-BR", { sensitivity: "base" }),
+  );
+
+const typesFor = (
+  entries: readonly CatalogEntry[],
+  status = "",
+): CatalogEntry["type"][] =>
+  [
+    ...new Set(
+      entries
+        .filter((entry) => !status || entry.status === status)
+        .map((entry) => entry.type),
+    ),
+  ].sort();
+
+const contentTypeLabel: Record<CatalogEntry["type"], string> = {
+  aula: "Aulas",
+  curso: "Cursos",
+  trilha: "Trilhas",
+  projeto: "Projetos",
+  noticia: "Notícias",
+};
 
 function createDraft(baseCommit = ""): LessonDraft {
   return {
@@ -46,6 +90,120 @@ function fillGptTestCase(
   catalog: readonly CatalogEntry[],
 ): LessonDraft {
   const type = current.contentType ?? "aula";
+  if (type === "aula") {
+    return {
+      ...current,
+      titulo: "Criando classes em Python do zero",
+      slug: "criando-classes-em-python",
+      resumo:
+        "Aprenda a modelar objetos em Python usando classes, atributos, métodos, construtores, herança e composição.",
+      tags: ["python", "programação", "orientação a objetos", "fundamentos"],
+      categoria: "Programação",
+      dificuldade: "iniciante",
+      autores: ["Equipe GEAR"],
+      preRequisitos: [],
+      videos: [],
+      linksExternos: [
+        {
+          titulo: "Documentação oficial de classes em Python",
+          url: "https://docs.python.org/3/tutorial/classes.html",
+        },
+        {
+          titulo: "PEP 8 — guia de estilo",
+          url: "https://peps.python.org/pep-0008/",
+        },
+      ],
+      repositorioGithub: "https://github.com/python/cpython",
+      status: "rascunho",
+      permiteComentarios: true,
+      body: [
+        {
+          id: randomUUID(),
+          kind: "heading",
+          level: 2,
+          text: "O que você vai aprender",
+        },
+        {
+          id: randomUUID(),
+          kind: "paragraph",
+          markdown:
+            "Uma classe é um molde; um objeto é uma instância criada a partir desse molde. Nesta aula vamos construir uma classe **Robo** passo a passo.",
+        },
+        {
+          id: randomUUID(),
+          kind: "video",
+          titulo: "Vídeo introdutório sobre orientação a objetos",
+          url: "https://www.youtube.com/watch?v=apACNr7DC_s",
+        },
+        {
+          id: randomUUID(),
+          kind: "paragraph",
+          markdown:
+            "Assista ao [vídeo introdutório sobre orientação a objetos](https://www.youtube.com/watch?v=apACNr7DC_s) antes de começar.",
+        },
+        {
+          id: randomUUID(),
+          kind: "heading",
+          level: 2,
+          text: "Criando a primeira classe",
+        },
+        {
+          id: randomUUID(),
+          kind: "code",
+          language: "python",
+          code: "class Robo:\n    pass\n\nwall_e = Robo()\nprint(type(wall_e))",
+        },
+        {
+          id: randomUUID(),
+          kind: "heading",
+          level: 2,
+          text: "Atributos, métodos e self",
+        },
+        {
+          id: randomUUID(),
+          kind: "paragraph",
+          markdown:
+            "O método `__init__` prepara o estado inicial. `self` representa o próprio objeto, enquanto os métodos definem seus comportamentos.",
+        },
+        {
+          id: randomUUID(),
+          kind: "code",
+          language: "python",
+          code: 'class Robo:\n    def __init__(self, nome, bateria=100):\n        self.nome = nome\n        self.bateria = bateria\n\n    def mover(self, distancia):\n        consumo = distancia * 2\n        if consumo > self.bateria:\n            return "Bateria insuficiente."\n        self.bateria -= consumo\n        return f"{self.nome} moveu {distancia} metros."\n\nrobo = Robo("Luna", 80)\nprint(robo.mover(10))',
+        },
+        {
+          id: randomUUID(),
+          kind: "heading",
+          level: 2,
+          text: "Herança e composição",
+        },
+        {
+          id: randomUUID(),
+          kind: "video",
+          titulo: "Vídeo complementar da aula",
+          url: "https://www.youtube.com/watch?v=JeznW_7DlB0",
+        },
+        {
+          id: randomUUID(),
+          kind: "paragraph",
+          markdown:
+            "Use herança quando um objeto **é um** tipo especializado de outro. Use composição quando ele **tem um** componente, como um robô que possui um sensor.",
+        },
+        {
+          id: randomUUID(),
+          kind: "quote",
+          markdown:
+            "Desafio: crie uma classe ContaBancaria com titular, saldo, depositar e sacar.",
+        },
+        {
+          id: randomUUID(),
+          kind: "paragraph",
+          markdown:
+            "Para aprofundar, consulte a [documentação oficial de classes](https://docs.python.org/3/tutorial/classes.html) e o [guia PEP 8](https://peps.python.org/pep-0008/).",
+        },
+      ],
+    };
+  }
   const storageKey = `gear-gpt-test-${type}`;
   const number = Number.parseInt(localStorage.getItem(storageKey) ?? "0", 10) + 1;
   localStorage.setItem(storageKey, String(number));
@@ -76,8 +234,7 @@ function fillGptTestCase(
     categoria: type === "trilha" ? "Testes automatizados" : "Validação GPT",
     dificuldade: "intermediário",
     autores: ["GPT Teste", "Equipe GEAR"],
-    preRequisitos:
-      type === "aula" && publishedLessons[0] ? [publishedLessons[0].slug] : [],
+    preRequisitos: [],
     aulaSlugs:
       type === "curso"
         ? publishedLessons.slice(0, 2).map((entry) => entry.slug)
@@ -93,23 +250,17 @@ function fillGptTestCase(
               : []),
           ]
         : undefined,
-    videos:
-      type === "aula" || type === "projeto"
-        ? ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
-        : [],
-    linksExternos:
-      type === "aula" ? [{ titulo: "Portal UFMG", url: "https://ufmg.br" }] : [],
+    videos: type === "projeto" ? ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"] : [],
+    linksExternos: [],
     repositorioGithub:
-      type === "aula" || type === "projeto"
-        ? "https://github.com/Tiago1a2a3a/Site_Gear"
-        : undefined,
+      type === "projeto" ? "https://github.com/Tiago1a2a3a/Site_Gear" : undefined,
     tecnologias: type === "projeto" ? ["TypeScript", "MDX", "Git"] : undefined,
     documentacao:
       type === "projeto" ? "https://github.com/Tiago1a2a3a/Site_Gear" : undefined,
     destaque: type === "curso" || type === "projeto" ? true : undefined,
     ordem: type === "trilha" ? number : undefined,
     status: "publicado",
-    permiteComentarios: type === "aula",
+    permiteComentarios: false,
     body: [
       {
         id: randomUUID(),
@@ -166,15 +317,11 @@ const unexpectedErrorMessage = (error: unknown): string =>
 function Home({
   environment,
   catalog,
-  onSync,
   onCreate,
-  busy,
 }: {
   environment?: EnvironmentStatus;
   catalog: CatalogEntry[];
-  onSync(): void;
   onCreate(): void;
-  busy: boolean;
 }) {
   const counts = Object.fromEntries(
     ["aula", "curso", "trilha", "projeto", "noticia"].map((type) => [
@@ -225,11 +372,6 @@ function Home({
           <small>Hashes do Portal são verificados antes de publicar.</small>
         </article>
       </div>
-      <div className="toolbar">
-        <button onClick={onSync} disabled={busy}>
-          {busy ? "Sincronizando…" : "Sincronizar agora"}
-        </button>
-      </div>
       <div className="count-grid">
         {Object.entries(counts).map(([type, count]) => (
           <article className="count-card" key={type}>
@@ -253,8 +395,12 @@ function Catalog({
 }) {
   const [query, setQuery] = useState("");
   const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [sort, setSort] = useState("title-asc");
   const [selected, setSelected] = useState<CatalogEntry>();
   const [deleting, setDeleting] = useState(false);
+  const types = useMemo(() => typesFor(entries, status), [entries, status]);
+  const statuses = useMemo(() => statusesFor(entries, type), [entries, type]);
   useEffect(() => {
     if (
       selected &&
@@ -263,18 +409,50 @@ function Catalog({
       setSelected(undefined);
     }
   }, [entries, selected]);
+  useEffect(() => {
+    if (status && !statuses.includes(status)) setStatus("");
+  }, [status, statuses]);
+  useEffect(() => {
+    if (type && !types.includes(type as CatalogEntry["type"])) setType("");
+  }, [type, types]);
   const visible = useMemo(() => {
     const normalized = query.toLocaleLowerCase("pt-BR");
-    return entries.filter(
+    const filtered = entries.filter(
       (entry) =>
         (!type || entry.type === type) &&
+        (!status || entry.status === status) &&
         (!normalized ||
           [entry.titulo, entry.slug, entry.summary, ...entry.tags]
             .join(" ")
             .toLocaleLowerCase("pt-BR")
             .includes(normalized)),
     );
-  }, [entries, query, type]);
+    const byTitle = (first: CatalogEntry, second: CatalogEntry) =>
+      first.titulo.localeCompare(second.titulo, "pt-BR", { sensitivity: "base" });
+    return filtered.sort((first, second) => {
+      if (sort === "title-desc") return -byTitle(first, second);
+      if (sort === "date-desc" || sort === "date-asc") {
+        if (!first.publicationDate && !second.publicationDate) {
+          return byTitle(first, second);
+        }
+        if (!first.publicationDate) return 1;
+        if (!second.publicationDate) return -1;
+        const comparison = first.publicationDate.localeCompare(second.publicationDate);
+        return comparison === 0
+          ? byTitle(first, second)
+          : sort === "date-desc"
+            ? -comparison
+            : comparison;
+      }
+      return byTitle(first, second);
+    });
+  }, [entries, query, sort, status, type]);
+  const formatDate = (value?: string) =>
+    value
+      ? new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(
+          new Date(`${value}T00:00:00Z`),
+        )
+      : "Data não informada";
   return (
     <section>
       <div className="section-heading">
@@ -286,6 +464,13 @@ function Catalog({
       </div>
       <div className="catalog-layout">
         <aside className="filters">
+          <div className="catalog-panel-heading">
+            <div>
+              <span className="eyebrow">Refinar lista</span>
+              <h2>Filtros</h2>
+            </div>
+            <span>{visible.length}</span>
+          </div>
           <label>
             Buscar
             <input
@@ -298,27 +483,63 @@ function Catalog({
             Tipo
             <select value={type} onChange={(event) => setType(event.target.value)}>
               <option value="">Todos</option>
-              <option value="aula">Aula</option>
-              <option value="curso">Curso</option>
-              <option value="trilha">Trilha</option>
-              <option value="projeto">Projeto</option>
-              <option value="noticia">Notícia</option>
+              {types.map((value) => (
+                <option value={value} key={value}>
+                  {contentTypeLabel[value]}
+                </option>
+              ))}
             </select>
           </label>
+          <label>
+            Estado
+            <select value={status} onChange={(event) => setStatus(event.target.value)}>
+              <option value="">Todos</option>
+              {statuses.map((value) => (
+                <option value={value} key={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Ordenar por
+            <select value={sort} onChange={(event) => setSort(event.target.value)}>
+              <option value="title-asc">Título: A–Z</option>
+              <option value="title-desc">Título: Z–A</option>
+              <option value="date-desc">Publicação: mais recente</option>
+              <option value="date-asc">Publicação: mais antiga</option>
+            </select>
+          </label>
+          <button
+            className="filter-reset"
+            type="button"
+            disabled={!query && !type && !status && sort === "title-asc"}
+            onClick={() => {
+              setQuery("");
+              setType("");
+              setStatus("");
+              setSort("title-asc");
+            }}
+          >
+            Limpar filtros
+          </button>
         </aside>
         <div className="catalog-list">
           {visible.map((entry) => (
             <button
-              className="catalog-item"
+              className={`catalog-item${selected?.sourcePath === entry.sourcePath ? " selected" : ""}`}
               key={entry.sourcePath}
               onClick={() => setSelected(entry)}
+              aria-pressed={selected?.sourcePath === entry.sourcePath}
             >
               <span className={`badge ${entry.type}`}>{entry.type}</span>
               <strong>{entry.titulo}</strong>
-              <small>
-                {entry.status} {entry.difficulty ? `• ${entry.difficulty}` : ""}
-              </small>
+              <span className={`catalog-status ${entry.status}`}>{entry.status}</span>
               <p>{entry.summary}</p>
+              <small className="catalog-date">
+                Publicação: {formatDate(entry.publicationDate)}
+                {entry.difficulty ? ` • ${entry.difficulty}` : ""}
+              </small>
             </button>
           ))}
           {!visible.length && <div className="empty">Nenhum conteúdo encontrado.</div>}
@@ -326,60 +547,406 @@ function Catalog({
         <aside className="detail">
           {selected ? (
             <>
-              <span className={`badge ${selected.type}`}>{selected.type}</span>
-              <h2>{selected.titulo}</h2>
-              <code>{selected.slug}</code>
-              <p>{selected.summary}</p>
-              <dl>
-                <dt>Status</dt>
-                <dd>{selected.status}</dd>
-                <dt>Origem</dt>
-                <dd>{selected.sourcePath}</dd>
-                <dt>Depende de</dt>
-                <dd>
-                  {selected.outgoingRelations.length ? (
-                    <ul className="relations">
-                      {selected.outgoingRelations.map((relation) => (
-                        <li key={relation}>{relation}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    "—"
-                  )}
-                </dd>
-                <dt>Usado por</dt>
-                <dd>
-                  {selected.incomingRelations.length ? (
-                    <ul className="relations">
-                      {selected.incomingRelations.map((relation) => (
-                        <li key={relation}>{relation}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    "—"
-                  )}
-                </dd>
-              </dl>
-              <button
-                className="danger"
-                disabled={deleting}
-                onClick={async () => {
-                  setDeleting(true);
-                  try {
-                    if (await onDelete(selected)) setSelected(undefined);
-                  } finally {
-                    setDeleting(false);
-                  }
-                }}
-              >
-                {deleting ? "Excluindo…" : "Excluir publicado"}
-              </button>
-              <button disabled={deleting} onClick={() => void onEdit(selected)}>
-                Editar conteúdo
-              </button>
+              <div className="detail-body">
+                <div className="catalog-panel-heading">
+                  <div>
+                    <span className="eyebrow">Item selecionado</span>
+                    <span className={`badge ${selected.type}`}>{selected.type}</span>
+                  </div>
+                </div>
+                <h2>{selected.titulo}</h2>
+                <code>{selected.slug}</code>
+                <p>{selected.summary}</p>
+                <dl>
+                  <dt>Status</dt>
+                  <dd>{selected.status}</dd>
+                  <dt>Data de publicação</dt>
+                  <dd>{formatDate(selected.publicationDate)}</dd>
+                  <dt>Origem</dt>
+                  <dd>{selected.sourcePath}</dd>
+                  <dt>Depende de</dt>
+                  <dd>
+                    {selected.outgoingRelations.length ? (
+                      <ul className="relations">
+                        {selected.outgoingRelations.map((relation) => (
+                          <li key={relation}>{relation}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      "—"
+                    )}
+                  </dd>
+                  <dt>Usado por</dt>
+                  <dd>
+                    {selected.incomingRelations.length ? (
+                      <ul className="relations">
+                        {selected.incomingRelations.map((relation) => (
+                          <li key={relation}>{relation}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      "—"
+                    )}
+                  </dd>
+                </dl>
+              </div>
+              <div className="detail-actions">
+                <button
+                  className="danger detail-action"
+                  disabled={deleting}
+                  onClick={async () => {
+                    setDeleting(true);
+                    try {
+                      if (await onDelete(selected)) setSelected(undefined);
+                    } finally {
+                      setDeleting(false);
+                    }
+                  }}
+                >
+                  {deleting ? "Excluindo…" : "Excluir publicado"}
+                </button>
+                <button
+                  className="detail-action"
+                  disabled={deleting}
+                  onClick={() => void onEdit(selected)}
+                >
+                  Editar conteúdo
+                </button>
+              </div>
             </>
           ) : (
             <div className="empty">Selecione um conteúdo para ver detalhes.</div>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
+function TagCollection({
+  tags,
+  catalog,
+  onUpdate,
+}: {
+  tags: TagCollectionEntry[];
+  catalog: CatalogEntry[];
+  onUpdate(
+    input: Readonly<{
+      tag: string;
+      replacement?: string;
+      sourcePath?: string;
+      enabled?: boolean;
+    }>,
+  ): Promise<boolean>;
+}) {
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("title-asc");
+  const [selected, setSelected] = useState<TagCollectionEntry>();
+  const [replacement, setReplacement] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [membershipType, setMembershipType] = useState("");
+  const [membershipStatus, setMembershipStatus] = useState("");
+  const [membershipSort, setMembershipSort] = useState("title-asc");
+  const [savingPath, setSavingPath] = useState("");
+  const visible = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("pt-BR");
+    const filtered = tags.filter(
+      (tag) => !normalized || tag.tag.toLocaleLowerCase("pt-BR").includes(normalized),
+    );
+    return filtered.sort((first, second) => {
+      const byTitle = first.tag.localeCompare(second.tag, "pt-BR", {
+        sensitivity: "base",
+      });
+      if (sort === "title-desc") return -byTitle;
+      if (sort === "usages-desc") return second.usages - first.usages || byTitle;
+      if (sort === "usages-asc") return first.usages - second.usages || byTitle;
+      return byTitle;
+    });
+  }, [query, sort, tags]);
+
+  useEffect(() => {
+    if (selected && tags.some((tag) => tag.tag === selected.tag)) return;
+    setSelected(tags[0]);
+  }, [selected, tags]);
+
+  useEffect(() => {
+    setReplacement(selected?.tag ?? "");
+  }, [selected]);
+
+  const taggableEntries = useMemo(
+    () => catalog.filter((entry) => entry.type !== "trilha"),
+    [catalog],
+  );
+  const membershipStatuses = useMemo(
+    () => statusesFor(taggableEntries, membershipType),
+    [membershipType, taggableEntries],
+  );
+  const membershipTypes = useMemo(
+    () => typesFor(taggableEntries, membershipStatus),
+    [membershipStatus, taggableEntries],
+  );
+  useEffect(() => {
+    if (membershipStatus && !membershipStatuses.includes(membershipStatus)) {
+      setMembershipStatus("");
+    }
+  }, [membershipStatus, membershipStatuses]);
+  useEffect(() => {
+    if (
+      membershipType &&
+      !membershipTypes.includes(membershipType as CatalogEntry["type"])
+    ) {
+      setMembershipType("");
+    }
+  }, [membershipType, membershipTypes]);
+  const membershipEntries = useMemo(() => {
+    if (!selected) return [];
+    const isRelated = (entry: CatalogEntry) =>
+      entry.tags.some((tag) => normalizeTag(tag) === normalizeTag(selected.tag));
+    const filtered = taggableEntries.filter(
+      (entry) =>
+        (!membershipType || entry.type === membershipType) &&
+        (!membershipStatus || entry.status === membershipStatus) &&
+        isRelated(entry),
+    );
+    return filtered.sort((first, second) => {
+      const byTitle = first.titulo.localeCompare(second.titulo, "pt-BR", {
+        sensitivity: "base",
+      });
+      if (membershipSort === "title-desc") return -byTitle;
+      if (membershipSort === "type")
+        return first.type.localeCompare(second.type) || byTitle;
+      if (membershipSort === "status")
+        return first.status.localeCompare(second.status) || byTitle;
+      if (membershipSort === "related") {
+        return Number(isRelated(second)) - Number(isRelated(first)) || byTitle;
+      }
+      return byTitle;
+    });
+  }, [membershipSort, membershipStatus, membershipType, selected, taggableEntries]);
+
+  const submit = async (input: Readonly<{ tag: string; replacement?: string }>) => {
+    setSaving(true);
+    try {
+      return await onUpdate(input);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateMembership = async (
+    input: Readonly<{ sourcePath: string; enabled: boolean }>,
+  ) => {
+    if (!selected) return false;
+    setSavingPath(input.sourcePath);
+    try {
+      return await onUpdate({ tag: selected.tag, ...input });
+    } finally {
+      setSavingPath("");
+    }
+  };
+
+  return (
+    <section>
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Coleção</span>
+          <h1>Tags</h1>
+        </div>
+        <span>{tags.length} tags</span>
+      </div>
+      <div className="tag-collection-layout">
+        <div className="tag-collection-list panel">
+          <div className="tag-collection-controls">
+            <label>
+              Buscar tag
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Nome da tag"
+              />
+            </label>
+            <label>
+              Organizar por
+              <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                <option value="title-asc">Nome: A–Z</option>
+                <option value="title-desc">Nome: Z–A</option>
+                <option value="usages-desc">Mais usadas</option>
+                <option value="usages-asc">Menos usadas</option>
+              </select>
+            </label>
+          </div>
+          <p className="tag-collection-summary">{visible.length} resultado(s)</p>
+          <div className="tag-collection-items">
+            {visible.map((tag) => (
+              <button
+                className={selected?.tag === tag.tag ? "active" : ""}
+                type="button"
+                key={tag.tag}
+                onClick={() => setSelected(tag)}
+              >
+                <strong>{tag.tag}</strong>
+                <small>{tag.usages} MDX relacionado(s)</small>
+              </button>
+            ))}
+            {!visible.length && <div className="empty">Nenhuma tag encontrada.</div>}
+          </div>
+        </div>
+        <aside className="tag-collection-detail panel">
+          {selected ? (
+            <>
+              <span className="eyebrow">Tag selecionada</span>
+              <h2>{selected.tag}</h2>
+              <p>
+                Esta tag aparece em <strong>{selected.usages}</strong> arquivo(s) MDX.
+              </p>
+              <div className="tag-type-list">
+                {selected.types.map((type) => (
+                  <span className={`badge ${type}`} key={type}>
+                    {type}
+                  </span>
+                ))}
+              </div>
+              <label>
+                Renomear para
+                <input
+                  value={replacement}
+                  onChange={(event) => setReplacement(event.target.value)}
+                  maxLength={200}
+                />
+              </label>
+              <button
+                className="detail-action"
+                type="button"
+                disabled={
+                  saving || !replacement.trim() || replacement.trim() === selected.tag
+                }
+                onClick={async () => {
+                  const next = replacement.trim();
+                  if (
+                    !window.confirm(
+                      `Renomear a tag “${selected.tag}” para “${next}” em ${selected.usages} arquivo(s) MDX e enviar a alteração para origin/main?`,
+                    )
+                  )
+                    return;
+                  if (await submit({ tag: selected.tag, replacement: next })) {
+                    setSelected(undefined);
+                  }
+                }}
+              >
+                {saving ? "Salvando…" : "Salvar novo nome"}
+              </button>
+              <button
+                className="danger detail-action"
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  if (
+                    !window.confirm(
+                      `Excluir a tag “${selected.tag}” de ${selected.usages} arquivo(s) MDX e enviar a alteração para origin/main?`,
+                    )
+                  )
+                    return;
+                  if (await submit({ tag: selected.tag })) setSelected(undefined);
+                }}
+              >
+                Excluir tag de todos os conteúdos
+              </button>
+              <div className="tag-membership-heading">
+                <div>
+                  <span className="eyebrow">Conteúdos</span>
+                  <h3>Conteúdos com a tag</h3>
+                </div>
+                <span>{membershipEntries.length}</span>
+              </div>
+              <div className="tag-membership-controls">
+                <label>
+                  Coleção
+                  <select
+                    value={membershipType}
+                    onChange={(event) => setMembershipType(event.target.value)}
+                  >
+                    <option value="">Todas</option>
+                    {membershipTypes.map((type) => (
+                      <option value={type} key={type}>
+                        {contentTypeLabel[type]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Estado
+                  <select
+                    value={membershipStatus}
+                    onChange={(event) => setMembershipStatus(event.target.value)}
+                  >
+                    <option value="">Todos</option>
+                    {membershipStatuses.map((status) => (
+                      <option value={status} key={status}>
+                        {status}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Ordenar
+                  <select
+                    value={membershipSort}
+                    onChange={(event) => setMembershipSort(event.target.value)}
+                  >
+                    <option value="title-asc">Título: A–Z</option>
+                    <option value="title-desc">Título: Z–A</option>
+                    <option value="related">Com tag primeiro</option>
+                    <option value="type">Coleção</option>
+                    <option value="status">Estado</option>
+                  </select>
+                </label>
+              </div>
+              <div className="tag-membership-list">
+                {membershipEntries.map((entry) => {
+                  const related = entry.tags.some(
+                    (tag) => normalizeTag(tag) === normalizeTag(selected.tag),
+                  );
+                  return (
+                    <label
+                      className={`tag-membership-card${related ? " related" : ""}`}
+                      key={entry.sourcePath}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={related}
+                        disabled={saving || savingPath === entry.sourcePath}
+                        onChange={async (event) => {
+                          const enabled = event.target.checked;
+                          if (
+                            !window.confirm(
+                              `${enabled ? "Adicionar" : "Remover"} a tag “${selected.tag}” ${enabled ? "ao" : "do"} conteúdo “${entry.titulo}” e enviar para origin/main?`,
+                            )
+                          )
+                            return;
+                          await updateMembership({
+                            sourcePath: entry.sourcePath,
+                            enabled,
+                          });
+                        }}
+                      />
+                      <span className="tag-membership-copy">
+                        <strong>{entry.titulo}</strong>
+                        <small>{entry.sourcePath}</small>
+                      </span>
+                      <span className="tag-membership-meta">
+                        <span className={`badge ${entry.type}`}>{entry.type}</span>
+                        <span className={`catalog-status ${entry.status}`}>
+                          {entry.status}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          ) : (
+            <div className="empty">Selecione uma tag para editar ou excluir.</div>
           )}
         </aside>
       </div>
@@ -408,13 +975,20 @@ function BlockEditor({
             ? { id, kind, items: [""] }
             : kind === "code"
               ? { id, kind, language: "text", code: "" }
-              : kind === "quote"
-                ? { id, kind, markdown: "" }
-                : kind === "image"
-                  ? { id, kind, imageId: images[0]?.id ?? "", alt: "" }
-                  : kind === "separator"
-                    ? { id, kind }
-                    : { id, kind: "paragraph", markdown: "" };
+              : kind === "video"
+                ? {
+                    id,
+                    kind,
+                    titulo: "Vídeo da aula",
+                    url: "https://www.youtube.com/watch?v=",
+                  }
+                : kind === "quote"
+                  ? { id, kind, markdown: "" }
+                  : kind === "image"
+                    ? { id, kind, imageId: images[0]?.id ?? "", alt: "" }
+                    : kind === "separator"
+                      ? { id, kind }
+                      : { id, kind: "paragraph", markdown: "" };
     onChange([...blocks, block]);
   };
   const update = (index: number, block: ContentBlock) =>
@@ -439,6 +1013,7 @@ function BlockEditor({
             "ordered-list",
             "image",
             "code",
+            "video",
             "quote",
             "separator",
           ] as const
@@ -588,6 +1163,23 @@ function BlockEditor({
                   placeholder="Texto alternativo obrigatório"
                 />
               </div>
+            ) : block.kind === "video" ? (
+              <div className="inline">
+                <input
+                  value={block.titulo}
+                  onChange={(event) =>
+                    update(index, { ...block, titulo: event.target.value })
+                  }
+                  placeholder="Título do vídeo"
+                />
+                <input
+                  value={block.url}
+                  onChange={(event) =>
+                    update(index, { ...block, url: event.target.value })
+                  }
+                  placeholder="URL HTTPS do YouTube"
+                />
+              </div>
             ) : (
               <hr />
             )}
@@ -603,11 +1195,13 @@ function LessonEditor({
   catalog,
   onSaved,
   onDraftChange,
+  advancedMode,
 }: {
   initialDraft: LessonDraft;
   catalog: CatalogEntry[];
   onSaved(draftId: string, commit: string): void;
   onDraftChange(draft: LessonDraft): void;
+  advancedMode: boolean;
 }) {
   const [draft, setDraft] = useState(initialDraft);
   const [step, setStep] = useState(1);
@@ -616,6 +1210,11 @@ function LessonEditor({
   const [review, setReview] = useState<ReviewBundle>();
   const [publish, setPublish] = useState<PublishBundle>();
   const [publishedCommit, setPublishedCommit] = useState("");
+  const [prerequisiteQuery, setPrerequisiteQuery] = useState("");
+  const [prerequisiteType, setPrerequisiteType] = useState("");
+  const [prerequisiteStatus, setPrerequisiteStatus] = useState("");
+  const [prerequisiteSort, setPrerequisiteSort] = useState("title-asc");
+  const [prerequisitePage, setPrerequisitePage] = useState(1);
   const autoSlug = useRef(initialDraft.slug === toSlug(initialDraft.titulo));
   const published = useRef(false);
   const set = <K extends keyof LessonDraft>(key: K, value: LessonDraft[K]) => {
@@ -640,6 +1239,106 @@ function LessonEditor({
 
   const lessons = catalog.filter((entry) => entry.type === "aula");
   const courses = catalog.filter((entry) => entry.type === "curso");
+  const prerequisiteCandidates = useMemo(
+    () => (draft.contentType === "curso" ? [...lessons, ...courses] : lessons),
+    [courses, draft.contentType, lessons],
+  );
+  const prerequisiteStatuses = useMemo(
+    () => statusesFor(prerequisiteCandidates, prerequisiteType),
+    [prerequisiteCandidates, prerequisiteType],
+  );
+  const prerequisiteTypes = useMemo(
+    () => typesFor(prerequisiteCandidates, prerequisiteStatus),
+    [prerequisiteCandidates, prerequisiteStatus],
+  );
+  useEffect(() => {
+    if (prerequisiteStatus && !prerequisiteStatuses.includes(prerequisiteStatus)) {
+      setPrerequisiteStatus("");
+    }
+  }, [prerequisiteStatus, prerequisiteStatuses]);
+  useEffect(() => {
+    if (
+      prerequisiteType &&
+      !prerequisiteTypes.includes(prerequisiteType as CatalogEntry["type"])
+    ) {
+      setPrerequisiteType("");
+    }
+  }, [prerequisiteType, prerequisiteTypes]);
+  const prerequisiteOptions = useMemo(() => {
+    const normalize = (value: string) =>
+      value
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLocaleLowerCase("pt-BR");
+    const normalizedQuery = normalize(prerequisiteQuery.trim());
+    return prerequisiteCandidates
+      .filter((entry) => entry.slug !== draft.slug)
+      .filter(
+        (entry) =>
+          draft.preRequisitos.includes(entry.slug) ||
+          ((!normalizedQuery ||
+            normalize([entry.titulo, entry.slug, ...entry.tags].join(" ")).includes(
+              normalizedQuery,
+            )) &&
+            (!prerequisiteType || entry.type === prerequisiteType) &&
+            (!prerequisiteStatus || entry.status === prerequisiteStatus)),
+      )
+      .sort((first, second) => {
+        const byTitle = first.titulo.localeCompare(second.titulo, "pt-BR", {
+          sensitivity: "base",
+        });
+        if (prerequisiteSort === "title-desc") return -byTitle;
+        if (prerequisiteSort === "selected") {
+          const firstSelected = draft.preRequisitos.includes(first.slug) ? 1 : 0;
+          const secondSelected = draft.preRequisitos.includes(second.slug) ? 1 : 0;
+          return secondSelected - firstSelected || byTitle;
+        }
+        if (prerequisiteSort === "date-desc" || prerequisiteSort === "date-asc") {
+          if (!first.publicationDate && !second.publicationDate) return byTitle;
+          if (!first.publicationDate) return 1;
+          if (!second.publicationDate) return -1;
+          const byDate = first.publicationDate.localeCompare(second.publicationDate);
+          return byDate === 0
+            ? byTitle
+            : prerequisiteSort === "date-desc"
+              ? -byDate
+              : byDate;
+        }
+        return byTitle;
+      });
+  }, [
+    draft.preRequisitos,
+    draft.slug,
+    prerequisiteCandidates,
+    prerequisiteQuery,
+    prerequisiteSort,
+    prerequisiteStatus,
+    prerequisiteType,
+  ]);
+  const activePrerequisiteFilters =
+    Number(Boolean(prerequisiteType)) +
+    Number(Boolean(prerequisiteStatus)) +
+    Number(prerequisiteSort !== "title-asc");
+  const prerequisitePageSize = 10;
+  const prerequisitePageCount = Math.max(
+    1,
+    Math.ceil(prerequisiteOptions.length / prerequisitePageSize),
+  );
+  const currentPrerequisitePage = Math.min(prerequisitePage, prerequisitePageCount);
+  const paginatedPrerequisiteOptions = prerequisiteOptions.slice(
+    (currentPrerequisitePage - 1) * prerequisitePageSize,
+    currentPrerequisitePage * prerequisitePageSize,
+  );
+
+  useEffect(() => {
+    setPrerequisitePage(1);
+  }, [
+    draft.contentType,
+    prerequisiteQuery,
+    prerequisiteSort,
+    prerequisiteStatus,
+    prerequisiteType,
+  ]);
   const prepare = async () => {
     setBusy(true);
     setError("");
@@ -707,21 +1406,22 @@ function LessonEditor({
             }
           </h1>
         </div>
-        <div>
-          <span>Rascunho salvo automaticamente</span>
-          <button
-            type="button"
-            disabled={Boolean(draft.sourcePath)}
-            onClick={() => {
-              autoSlug.current = false;
-              setReview(undefined);
-              setPublish(undefined);
-              setDraft((current) => fillGptTestCase(current, catalog));
-            }}
-          >
-            Preencher caso GPT
-          </button>
-        </div>
+        {advancedMode && (
+          <div>
+            <button
+              type="button"
+              disabled={Boolean(draft.sourcePath)}
+              onClick={() => {
+                autoSlug.current = false;
+                setReview(undefined);
+                setPublish(undefined);
+                setDraft((current) => fillGptTestCase(current, catalog));
+              }}
+            >
+              Preencher modelo Python
+            </button>
+          </div>
+        )}
       </div>
       <ErrorMessage message={error} />
       <div className="steps">
@@ -1080,17 +1780,104 @@ function LessonEditor({
             !draft.contentType) && (
             <fieldset className="wide">
               <legend>Pré-requisitos</legend>
-              <div className="choice-grid">
-                {(draft.contentType === "curso" ? [...lessons, ...courses] : lessons)
-                  .filter((entry) => entry.slug !== draft.slug)
-                  .map((lesson) => (
-                    <label className="check" key={lesson.slug}>
+              <div className="dependency-search">
+                <label className="dependency-search-field">
+                  <span>Buscar conteúdo</span>
+                  <input
+                    type="search"
+                    value={prerequisiteQuery}
+                    onChange={(event) => setPrerequisiteQuery(event.target.value)}
+                    placeholder="Digite o título ou slug"
+                  />
+                </label>
+                <details className="dependency-filter-menu">
+                  <summary>
+                    Filtros
+                    {activePrerequisiteFilters > 0 && (
+                      <span>{activePrerequisiteFilters}</span>
+                    )}
+                  </summary>
+                  <div className="dependency-filter-popover">
+                    <label>
+                      Tipo
+                      <select
+                        value={prerequisiteType}
+                        onChange={(event) => setPrerequisiteType(event.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        {prerequisiteTypes.map((type) => (
+                          <option value={type} key={type}>
+                            {contentTypeLabel[type]}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Estado
+                      <select
+                        value={prerequisiteStatus}
+                        onChange={(event) => setPrerequisiteStatus(event.target.value)}
+                      >
+                        <option value="">Todos</option>
+                        {prerequisiteStatuses.map((status) => (
+                          <option value={status} key={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Ordenar
+                      <select
+                        value={prerequisiteSort}
+                        onChange={(event) => setPrerequisiteSort(event.target.value)}
+                      >
+                        <option value="title-asc">Título: A–Z</option>
+                        <option value="title-desc">Título: Z–A</option>
+                        <option value="date-desc">Mais recentes</option>
+                        <option value="date-asc">Mais antigos</option>
+                        <option value="selected">Selecionados primeiro</option>
+                      </select>
+                    </label>
+                    <button
+                      type="button"
+                      disabled={!activePrerequisiteFilters}
+                      onClick={() => {
+                        setPrerequisiteType("");
+                        setPrerequisiteStatus("");
+                        setPrerequisiteSort("title-asc");
+                      }}
+                    >
+                      Limpar filtros
+                    </button>
+                  </div>
+                </details>
+              </div>
+              <p className="dependency-summary">
+                {prerequisiteOptions.length
+                  ? `Mostrando ${(currentPrerequisitePage - 1) * prerequisitePageSize + 1}–${Math.min(currentPrerequisitePage * prerequisitePageSize, prerequisiteOptions.length)} de ${prerequisiteOptions.length}`
+                  : "0 resultados"}{" "}
+                • {draft.preRequisitos.length} selecionado(s)
+                {prerequisiteQuery && (
+                  <button type="button" onClick={() => setPrerequisiteQuery("")}>
+                    Limpar busca
+                  </button>
+                )}
+              </p>
+              <div className="dependency-grid">
+                {paginatedPrerequisiteOptions.map((lesson) => {
+                  const checked = draft.preRequisitos.includes(lesson.slug);
+                  const unavailable =
+                    draft.status === "publicado" && lesson.status !== "publicado";
+                  return (
+                    <label
+                      className={`dependency-card${checked ? " selected" : ""}${unavailable ? " unavailable" : ""}`}
+                      key={`${lesson.type}:${lesson.slug}`}
+                    >
                       <input
                         type="checkbox"
-                        checked={draft.preRequisitos.includes(lesson.slug)}
-                        disabled={
-                          draft.status === "publicado" && lesson.status !== "publicado"
-                        }
+                        checked={checked}
+                        disabled={unavailable}
                         onChange={(event) =>
                           set(
                             "preRequisitos",
@@ -1102,31 +1889,70 @@ function LessonEditor({
                           )
                         }
                       />
-                      {lesson.titulo} <small>({lesson.status})</small>
+                      <span className="dependency-card-copy">
+                        <strong>{lesson.titulo}</strong>
+                        <small>
+                          {lesson.slug}
+                          {lesson.publicationDate
+                            ? ` • ${lesson.publicationDate}`
+                            : " • sem data"}
+                        </small>
+                      </span>
+                      <span className="dependency-card-meta">
+                        <span className={`badge ${lesson.type}`}>{lesson.type}</span>
+                        <span className={`catalog-status ${lesson.status}`}>
+                          {lesson.status}
+                        </span>
+                      </span>
                     </label>
-                  ))}
+                  );
+                })}
+                {!prerequisiteOptions.length && (
+                  <div className="dependency-empty">
+                    Nenhum conteúdo encontrado para essa busca.
+                  </div>
+                )}
               </div>
+              {prerequisitePageCount > 1 && (
+                <nav
+                  className="dependency-pagination"
+                  aria-label="Páginas de pré-requisitos"
+                >
+                  <button
+                    type="button"
+                    disabled={currentPrerequisitePage === 1}
+                    onClick={() => setPrerequisitePage(currentPrerequisitePage - 1)}
+                  >
+                    Anterior
+                  </button>
+                  <div>
+                    {Array.from({ length: prerequisitePageCount }, (_, index) => {
+                      const page = index + 1;
+                      return (
+                        <button
+                          type="button"
+                          className={page === currentPrerequisitePage ? "active" : ""}
+                          aria-current={
+                            page === currentPrerequisitePage ? "page" : undefined
+                          }
+                          key={page}
+                          onClick={() => setPrerequisitePage(page)}
+                        >
+                          {page}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <button
+                    type="button"
+                    disabled={currentPrerequisitePage === prerequisitePageCount}
+                    onClick={() => setPrerequisitePage(currentPrerequisitePage + 1)}
+                  >
+                    Próxima
+                  </button>
+                </nav>
+              )}
             </fieldset>
-          )}
-          {(draft.contentType === "aula" ||
-            draft.contentType === "projeto" ||
-            !draft.contentType) && (
-            <label className="wide">
-              Vídeos HTTPS, um por linha
-              <textarea
-                value={draft.videos.join("\n")}
-                onChange={(event) =>
-                  set(
-                    "videos",
-                    event.target.value
-                      .split("\n")
-                      .map((value) => value.trim())
-                      .filter(Boolean),
-                  )
-                }
-              />
-              <small>Vídeos aparecem em Recursos da aula, após o conteúdo.</small>
-            </label>
           )}
           {(draft.contentType === "aula" || !draft.contentType) && (
             <label className="wide">
@@ -1298,6 +2124,10 @@ function LessonEditor({
                   <p>{block.markdown}</p>
                 ) : block.kind === "code" ? (
                   <pre>{block.code}</pre>
+                ) : block.kind === "video" ? (
+                  <p>
+                    ▶️ {block.titulo} — <code>{block.url}</code>
+                  </p>
                 ) : block.kind === "unordered-list" || block.kind === "ordered-list" ? (
                   <ul>
                     {block.items.map((item, index) => (
@@ -1380,11 +2210,16 @@ export function App() {
   const [screen, setScreen] = useState<Screen>("inicio");
   const [environment, setEnvironment] = useState<EnvironmentStatus>();
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
+  const [tags, setTags] = useState<TagCollectionEntry[]>([]);
   const [drafts, setDrafts] = useState<LessonDraft[]>([]);
   const [activeDraft, setActiveDraft] = useState<LessonDraft>();
   const [remoteUrl, setRemoteUrl] = useState(EXPECTED_REMOTE_URL);
   const [autoUpdateReferencesOnDelete, setAutoUpdateReferencesOnDelete] =
     useState(false);
+  const [advancedMode, setAdvancedMode] = useState(false);
+  const [sidebarOrder, setSidebarOrder] = useState<SidebarItemId[]>([
+    ...DEFAULT_SIDEBAR_ORDER,
+  ]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -1395,19 +2230,32 @@ export function App() {
     return () => window.clearTimeout(timeout);
   }, [error]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   const refresh = async () => {
-    const [environmentResult, catalogResult, draftsResult] = await Promise.all([
-      window.gearContentStudio.environmentCheck(),
-      window.gearContentStudio.listCatalog(),
-      window.gearContentStudio.listDrafts(),
-    ]);
+    const [environmentResult, catalogResult, tagsResult, draftsResult] =
+      await Promise.all([
+        window.gearContentStudio.environmentCheck(),
+        window.gearContentStudio.listCatalog(),
+        window.gearContentStudio.listTags(),
+        window.gearContentStudio.listDrafts(),
+      ]);
     if (environmentResult.ok) {
       setEnvironment(environmentResult.value);
       setAutoUpdateReferencesOnDelete(
         environmentResult.value.autoUpdateReferencesOnDelete,
       );
+      setAdvancedMode(environmentResult.value.advancedMode);
+      if (environmentResult.value.sidebarOrder.length) {
+        setSidebarOrder(environmentResult.value.sidebarOrder);
+      }
     }
     if (catalogResult.ok) setCatalog(catalogResult.value);
+    if (tagsResult.ok) setTags(tagsResult.value);
     if (draftsResult.ok) {
       setDrafts((current) => {
         const merged = new Map(
@@ -1420,13 +2268,32 @@ export function App() {
   };
   useEffect(() => void refresh(), []);
 
-  const synchronize = async () => {
+  const synchronize = async (): Promise<string | undefined> => {
     setBusy(true);
     setError("");
-    const result = await window.gearContentStudio.synchronize();
-    setBusy(false);
-    if (!result.ok) return setError(result.error.message);
-    await refresh();
+    try {
+      let lastError = "Não foi possível sincronizar.";
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        const result = await window.gearContentStudio.synchronize();
+        if (result.ok) {
+          await refresh();
+          return result.value.commit;
+        }
+        lastError = result.error.message;
+        if (attempt < 2) {
+          await new Promise((resolve) => window.setTimeout(resolve, 750));
+        }
+      }
+      setError(`Sincronização falhou após 2 tentativas: ${lastError}`);
+      return undefined;
+    } catch (caught) {
+      setError(
+        `Sincronização falhou após 2 tentativas: ${unexpectedErrorMessage(caught)}`,
+      );
+      return undefined;
+    } finally {
+      setBusy(false);
+    }
   };
   const createNew = () => {
     setActiveDraft(createDraft(environment?.currentCommit));
@@ -1443,8 +2310,8 @@ export function App() {
   return (
     <div className="shell">
       <header className="topbar">
-        <img className="brand-logo" src={GEAR_LOGO_DATA_URL} alt="GEAR" />
-        <div>
+        <img className="brand-logo" src={GEAR_LOGO_COMPACT_DATA_URL} alt="GEAR" />
+        <div className="brand-copy">
           <strong>GEAR Content Studio</strong>
           <small>
             {environment?.repositoryReady
@@ -1452,27 +2319,27 @@ export function App() {
               : "Configuração local"}
           </small>
         </div>
+        <button
+          className="topbar-sync"
+          type="button"
+          disabled={busy}
+          onClick={() => void synchronize()}
+        >
+          {busy ? "Sincronizando…" : "Sincronizar"}
+        </button>
         <span className="connection">
           <i className={environment?.configured ? "online" : ""} />
           {environment?.configured ? "Git configurado" : "Configuração necessária"}
         </span>
       </header>
       <aside className="sidebar">
-        {(
-          [
-            ["inicio", "Início"],
-            ["catalogo", "Catálogo"],
-            ["nova-aula", "Novo conteúdo"],
-            ["rascunhos", "Rascunhos"],
-            ["configuracao", "Configurações"],
-          ] as const
-        ).map(([value, label]) => (
+        {sidebarOrder.map((value) => (
           <button
             key={value}
             className={screen === value ? "active" : ""}
             onClick={() => (value === "nova-aula" ? createNew() : setScreen(value))}
           >
-            {label}
+            {sidebarLabels[value]}
           </button>
         ))}
       </aside>
@@ -1502,13 +2369,7 @@ export function App() {
           </div>
         )}
         {screen === "inicio" && (
-          <Home
-            environment={environment}
-            catalog={catalog}
-            onSync={synchronize}
-            onCreate={createNew}
-            busy={busy}
-          />
+          <Home environment={environment} catalog={catalog} onCreate={createNew} />
         )}
         {screen === "catalogo" && (
           <Catalog
@@ -1579,11 +2440,41 @@ export function App() {
             }}
           />
         )}
+        {screen === "tags" && (
+          <TagCollection
+            tags={tags}
+            catalog={catalog}
+            onUpdate={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await window.gearContentStudio.updateTag(input);
+                if (!result.ok) {
+                  setError(`${result.error.title}: ${result.error.message}`);
+                  return false;
+                }
+                await refresh();
+                setNotice(
+                  `Coleção de tags atualizada em origin/main (${result.value.commit.slice(0, 8)}). ${result.value.updatedPaths.length} arquivo(s) MDX foram alterados.`,
+                );
+                return true;
+              } catch (caught) {
+                setError(
+                  `Não foi possível atualizar a tag: ${unexpectedErrorMessage(caught)}`,
+                );
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        )}
         {screen === "nova-aula" && activeDraft && (
           <LessonEditor
             key={activeDraft.id}
             initialDraft={activeDraft}
             catalog={catalog}
+            advancedMode={advancedMode}
             onSaved={(draftId, commit) => {
               setDrafts((current) => current.filter((draft) => draft.id !== draftId));
               setActiveDraft(undefined);
@@ -1668,11 +2559,74 @@ export function App() {
               <span>
                 <strong>Atualizar dependências ao excluir</strong>
                 <small>
-                  Remove automaticamente o slug de aulas, cursos e trilhas que
-                  dependem do conteúdo excluído, tudo no mesmo commit.
+                  Remove automaticamente o slug de aulas, cursos e trilhas que dependem
+                  do conteúdo excluído, tudo no mesmo commit.
                 </small>
               </span>
             </label>
+            <label className="setting-option">
+              <input
+                type="checkbox"
+                checked={advancedMode}
+                onChange={(event) => setAdvancedMode(event.target.checked)}
+              />
+              <span>
+                <strong>Modo avançado</strong>
+                <small>
+                  Exibe o menu de desenvolvimento e ferramentas de teste, como o
+                  preenchimento automático do modelo Python.
+                </small>
+              </span>
+            </label>
+            <div className="sidebar-order-setting">
+              <span>
+                <strong>Ordem da barra lateral</strong>
+                <small>Use as setas para definir a ordem dos atalhos do app.</small>
+              </span>
+              <ol>
+                {sidebarOrder.map((item, index) => (
+                  <li key={item}>
+                    <span>{sidebarLabels[item]}</span>
+                    <div>
+                      <button
+                        type="button"
+                        aria-label={`Mover ${sidebarLabels[item]} para cima`}
+                        disabled={index === 0}
+                        onClick={() =>
+                          setSidebarOrder((current) => {
+                            const next = [...current];
+                            [next[index - 1], next[index]] = [
+                              next[index]!,
+                              next[index - 1]!,
+                            ];
+                            return next;
+                          })
+                        }
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Mover ${sidebarLabels[item]} para baixo`}
+                        disabled={index === sidebarOrder.length - 1}
+                        onClick={() =>
+                          setSidebarOrder((current) => {
+                            const next = [...current];
+                            [next[index], next[index + 1]] = [
+                              next[index + 1]!,
+                              next[index]!,
+                            ];
+                            return next;
+                          })
+                        }
+                      >
+                        ↓
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </div>
             <button
               className="primary"
               onClick={async () => {
@@ -1680,9 +2634,12 @@ export function App() {
                 const result = await window.gearContentStudio.configure({
                   remoteUrl,
                   autoUpdateReferencesOnDelete,
+                  advancedMode,
+                  sidebarOrder,
                 });
                 setBusy(false);
                 if (!result.ok) return setError(result.error.message);
+                await window.gearContentStudio.setAdvancedMode(advancedMode);
                 await refresh();
                 setScreen("inicio");
               }}

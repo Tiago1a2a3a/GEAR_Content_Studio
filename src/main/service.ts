@@ -12,6 +12,7 @@ import type {
   GearContentStudioApi,
   LessonDraft,
   Result,
+  SidebarItemId,
 } from "../shared/types";
 import { fail, ok } from "../shared/types";
 import { inspectDownloads, inspectImages } from "./filesystem/media";
@@ -29,6 +30,7 @@ import {
 import { runGit } from "./git/runner";
 import { ManagedRepository } from "./repository/repository";
 import { Publisher } from "./repository/publisher";
+import { setAdvancedApplicationMenu } from "./menu";
 import { verifyPortalContract, type PortalContractLock } from "./validation/contract";
 
 export class AppService implements GearContentStudioApi {
@@ -102,8 +104,9 @@ export class AppService implements GearContentStudioApi {
         repositoryReady,
         contractCompatible,
         currentCommit,
-        autoUpdateReferencesOnDelete:
-          settings?.autoUpdateReferencesOnDelete ?? false,
+        autoUpdateReferencesOnDelete: settings?.autoUpdateReferencesOnDelete ?? false,
+        advancedMode: settings?.advancedMode ?? false,
+        sidebarOrder: settings?.sidebarOrder ?? [],
       };
     });
   }
@@ -112,6 +115,8 @@ export class AppService implements GearContentStudioApi {
     input: Readonly<{
       remoteUrl: string;
       autoUpdateReferencesOnDelete: boolean;
+      advancedMode: boolean;
+      sidebarOrder: SidebarItemId[];
     }>,
   ): Promise<Result<void>> {
     return this.wrap("CONFIGURE", async () => {
@@ -130,8 +135,14 @@ export class AppService implements GearContentStudioApi {
         this.directories,
         remoteUrl,
         input.autoUpdateReferencesOnDelete,
+        input.advancedMode,
+        input.sidebarOrder,
       );
     });
+  }
+
+  async setAdvancedMode(enabled: boolean): Promise<void> {
+    setAdvancedApplicationMenu(enabled);
   }
 
   async synchronize(): Promise<
@@ -149,6 +160,21 @@ export class AppService implements GearContentStudioApi {
     return this.wrap("LIST_CATALOG", async () =>
       filterCatalog(await this.#repository.catalog(), filter),
     );
+  }
+
+  async listTags() {
+    return this.wrap("LIST_TAGS", () => this.#publisher.listTags());
+  }
+
+  async updateTag(
+    input: Readonly<{
+      tag: string;
+      replacement?: string;
+      sourcePath?: string;
+      enabled?: boolean;
+    }>,
+  ) {
+    return this.wrap("UPDATE_TAG", () => this.#publisher.updateTag(input));
   }
 
   async chooseImages() {

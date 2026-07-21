@@ -12,6 +12,17 @@ export type Result<T> =
 
 export type ContentType = "aula" | "curso" | "trilha" | "projeto" | "noticia";
 
+export const DEFAULT_SIDEBAR_ORDER = [
+  "inicio",
+  "catalogo",
+  "nova-aula",
+  "rascunhos",
+  "tags",
+  "configuracao",
+] as const;
+
+export type SidebarItemId = (typeof DEFAULT_SIDEBAR_ORDER)[number];
+
 export type PendingImage = Readonly<{
   id: string;
   sourcePath: string;
@@ -38,6 +49,7 @@ export type ContentBlock =
   | Readonly<{ id: string; kind: "ordered-list"; items: string[] }>
   | Readonly<{ id: string; kind: "image"; imageId: string; alt: string }>
   | Readonly<{ id: string; kind: "code"; language: string; code: string }>
+  | Readonly<{ id: string; kind: "video"; titulo: string; url: string }>
   | Readonly<{ id: string; kind: "quote"; markdown: string }>
   | Readonly<{ id: string; kind: "separator" }>;
 
@@ -85,8 +97,10 @@ export type CatalogEntry = Readonly<{
   status: string;
   summary: string;
   tags: string[];
+  tagField?: "tags" | "tecnologias";
   category?: string;
   difficulty?: string;
+  publicationDate?: string;
   sourcePath: string;
   outgoingRelations: string[];
   incomingRelations: string[];
@@ -100,6 +114,19 @@ export type CatalogFilter = Readonly<{
   difficulty?: string;
   category?: string;
   tag?: string;
+}>;
+
+export type TagCollectionEntry = Readonly<{
+  tag: string;
+  usages: number;
+  contentPaths: string[];
+  types: ContentType[];
+}>;
+
+export type TagMutationResult = Readonly<{
+  commit: string;
+  pushedTo: "origin/main";
+  updatedPaths: string[];
 }>;
 
 export type ValidationIssue = Readonly<{
@@ -136,6 +163,8 @@ export type EnvironmentStatus = Readonly<{
   contractCompatible: boolean;
   currentCommit?: string;
   autoUpdateReferencesOnDelete: boolean;
+  advancedMode: boolean;
+  sidebarOrder: SidebarItemId[];
 }>;
 
 export type GearContentStudioApi = Readonly<{
@@ -144,10 +173,22 @@ export type GearContentStudioApi = Readonly<{
     input: Readonly<{
       remoteUrl: string;
       autoUpdateReferencesOnDelete: boolean;
+      advancedMode: boolean;
+      sidebarOrder: SidebarItemId[];
     }>,
   ): Promise<Result<void>>;
+  setAdvancedMode(enabled: boolean): Promise<void>;
   synchronize(): Promise<Result<Readonly<{ commit: string; indexedEntries: number }>>>;
   listCatalog(filter?: CatalogFilter): Promise<Result<CatalogEntry[]>>;
+  listTags(): Promise<Result<TagCollectionEntry[]>>;
+  updateTag(
+    input: Readonly<{
+      tag: string;
+      replacement?: string;
+      sourcePath?: string;
+      enabled?: boolean;
+    }>,
+  ): Promise<Result<TagMutationResult>>;
   chooseImages(): Promise<Result<PendingImage[]>>;
   chooseDownloads(): Promise<Result<PendingDownload[]>>;
   loadPublished(input: Readonly<{ sourcePath: string }>): Promise<Result<LessonDraft>>;
@@ -163,9 +204,7 @@ export type GearContentStudioApi = Readonly<{
   cancelOperation(operationId: string): Promise<Result<void>>;
   openExternalHttps(url: string): Promise<Result<void>>;
   copyDiagnostic(detailsId: string): Promise<Result<string>>;
-  deletePublished(
-    input: Readonly<{ sourcePath: string }>,
-  ): Promise<
+  deletePublished(input: Readonly<{ sourcePath: string }>): Promise<
     Result<
       Readonly<{
         commit: string;

@@ -9,6 +9,83 @@ const strings = (value: unknown): string[] =>
     ? value.filter((item): item is string => typeof item === "string")
     : [];
 
+function parseBodyBlocks(content: string) {
+  const lines = content.replaceAll("\r\n", "\n").split("\n");
+  const blocks: LessonDraft["body"] = [];
+  let index = 0;
+  const pushParagraph = (value: string) => {
+    const markdown = value.trim();
+    if (markdown) blocks.push({ id: randomUUID(), kind: "paragraph", markdown });
+  };
+
+  while (index < lines.length) {
+    const line = lines[index] ?? "";
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+    const video = line.match(/^<VideoEmbed\s*$/);
+    if (video) {
+      const chunk: string[] = [];
+      while (index < lines.length && !lines[index]!.includes("/>")) {
+        chunk.push(lines[index]!);
+        index += 1;
+      }
+      if (index < lines.length) chunk.push(lines[index++]!);
+      const title = chunk.join(" ").match(/titulo="([^"]+)"/)?.[1];
+      const url = chunk.join(" ").match(/url="(https:\/\/[^"]+)"/)?.[1];
+      if (title && url) blocks.push({ id: randomUUID(), kind: "video", titulo: title, url });
+      continue;
+    }
+    const heading = line.match(/^(#{2,4})\s+(.+)$/);
+    if (heading) {
+      blocks.push({ id: randomUUID(), kind: "heading", level: heading[1]!.length as 2 | 3 | 4, text: heading[2]!.trim() });
+      index += 1;
+      continue;
+    }
+    if (/^```/.test(line)) {
+      const language = line.slice(3).trim() || "text";
+      index += 1;
+      const code: string[] = [];
+      while (index < lines.length && !/^```/.test(lines[index]!)) code.push(lines[index++]!);
+      if (index < lines.length) index += 1;
+      blocks.push({ id: randomUUID(), kind: "code", language, code: code.join("\n") });
+      continue;
+    }
+    if (/^---\s*$/.test(line)) {
+      blocks.push({ id: randomUUID(), kind: "separator" });
+      index += 1;
+      continue;
+    }
+    if (/^>\s?/.test(line)) {
+      const quote: string[] = [];
+      while (index < lines.length && /^>\s?/.test(lines[index]!)) quote.push(lines[index++]!.replace(/^>\s?/, ""));
+      blocks.push({ id: randomUUID(), kind: "quote", markdown: quote.join("\n") });
+      continue;
+    }
+    if (/^[-*]\s+/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^[-*]\s+/.test(lines[index]!)) items.push(lines[index++]!.replace(/^[-*]\s+/, ""));
+      blocks.push({ id: randomUUID(), kind: "unordered-list", items });
+      continue;
+    }
+    if (/^\d+\.\s+/.test(line)) {
+      const items: string[] = [];
+      while (index < lines.length && /^\d+\.\s+/.test(lines[index]!)) items.push(lines[index++]!.replace(/^\d+\.\s+/, ""));
+      blocks.push({ id: randomUUID(), kind: "ordered-list", items });
+      continue;
+    }
+    const paragraph: string[] = [line];
+    index += 1;
+    while (index < lines.length && lines[index]!.trim() &&
+      !/^(#{2,4})\s+|^```|^---\s*$|^>\s?|^[-*]\s+|^\d+\.\s+|^<VideoEmbed\s*$/.test(lines[index]!)) {
+      paragraph.push(lines[index++]!);
+    }
+    pushParagraph(paragraph.join("\n"));
+  }
+  return blocks.length ? blocks : [{ id: randomUUID(), kind: "paragraph" as const, markdown: "" }];
+}
+
 export function parsePublishedDraft(
   raw: string,
   type: ContentType,
@@ -145,11 +222,13 @@ export function parsePublishedDraft(
     existingBannerPath: cover,
     existingImagePaths: projectImages,
     body: [
-      {
+      ...parseBodyBlocks(body),
+      ...strings(data.videos).map((url) => ({
         id: randomUUID(),
-        kind: "paragraph",
-        markdown: body,
-      },
+        kind: "video" as const,
+        titulo: "Vídeo da aula",
+        url,
+      })),
     ],
   };
 }

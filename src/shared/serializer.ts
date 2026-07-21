@@ -44,6 +44,8 @@ function blockToMdx(block: ContentBlock, draft: LessonDraft): string {
     }
     case "code":
       return `\`\`\`${block.language.trim()}\n${block.code.replace(/\s+$/, "")}\n\`\`\``;
+    case "video":
+      return `<VideoEmbed\n  titulo="${block.titulo.replaceAll('"', "&quot;")}"\n  url="${block.url}"\n/>`;
     case "quote":
       return block.markdown
         .trim()
@@ -61,6 +63,7 @@ export function serializeBody(draft: LessonDraft): string {
       const rendered = blockToMdx(block, draft);
       if (
         block.kind !== "code" &&
+        block.kind !== "video" &&
         unsafeBody.some((pattern) => pattern.test(rendered))
       ) {
         throw new Error(
@@ -100,7 +103,6 @@ function serializeFrontmatter(draft: LessonDraft): Record<string, unknown> {
       ...(draft.dataAtualizacao ? { dataAtualizacao: draft.dataAtualizacao } : {}),
       autores: draft.autores.map((value) => value.trim()),
       ...(draft.preRequisitos.length ? { preRequisitos: draft.preRequisitos } : {}),
-      ...(draft.videos.length ? { videos: draft.videos } : {}),
       ...(draft.linksExternos.length ? { linksExternos: draft.linksExternos } : {}),
       ...(draft.downloads?.length || draft.existingDownloads?.length
         ? {
@@ -170,7 +172,6 @@ function serializeFrontmatter(draft: LessonDraft): Record<string, unknown> {
             ],
           }
         : {}),
-      ...(draft.videos.length ? { videos: draft.videos } : {}),
       ...(draft.tecnologias?.length ? { tecnologias: draft.tecnologias } : {}),
       ...(draft.repositorioGithub
         ? { repositorioGithub: draft.repositorioGithub }

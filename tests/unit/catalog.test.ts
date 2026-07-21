@@ -34,5 +34,9 @@ describe("catálogo", () => {
       new Set(["aula", "curso", "trilha", "projeto", "noticia"]),
     );
     expect(entries.every((entry) => entry.slug && entry.titulo)).toBe(true);
+    expect(entries.find((entry) => entry.type === "projeto")).toMatchObject({
+      tagField: "tecnologias",
+      tags: ["ESP32", "C++"],
+    });
   });
 });

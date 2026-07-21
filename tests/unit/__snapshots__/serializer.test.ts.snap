@@ -13,8 +13,6 @@ dificuldade: iniciante
 dataPublicacao: 2026-07-20
 autores:
   - Equipe GEAR
-videos:
-  - https://example.com/video
 status: rascunho
 permiteComentarios: false
 ---

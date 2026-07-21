@@ -5,8 +5,11 @@ import type { GearContentStudioApi } from "../shared/types";
 const api: GearContentStudioApi = {
   environmentCheck: () => ipcRenderer.invoke("gear:environment-check"),
   configure: (input) => ipcRenderer.invoke("gear:configure", input),
+  setAdvancedMode: (enabled) => ipcRenderer.invoke("gear:set-advanced-mode", enabled),
   synchronize: () => ipcRenderer.invoke("gear:synchronize"),
   listCatalog: (filter) => ipcRenderer.invoke("gear:list-catalog", filter),
+  listTags: () => ipcRenderer.invoke("gear:list-tags"),
+  updateTag: (input) => ipcRenderer.invoke("gear:update-tag", input),
   chooseImages: () => ipcRenderer.invoke("gear:choose-images"),
   chooseDownloads: () => ipcRenderer.invoke("gear:choose-downloads"),
   loadPublished: (input) => ipcRenderer.invoke("gear:load-published", input),

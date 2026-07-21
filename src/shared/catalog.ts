@@ -58,6 +58,7 @@ export async function parseCatalog(repositoryRoot: string): Promise<CatalogEntry
       const parsed = matter(raw);
       const data = parsed.data as Record<string, unknown>;
       const slug = String(data.slug ?? path.basename(name, ".mdx"));
+      const tagField = type === "projeto" ? "tecnologias" : "tags";
       const outgoingRelations = relationFields.flatMap((field) =>
         asStrings(data[field]),
       );
@@ -67,7 +68,8 @@ export async function parseCatalog(repositoryRoot: string): Promise<CatalogEntry
         titulo: String(data.titulo ?? slug),
         status: String(data.status ?? "desconhecido"),
         summary: summaryField ? String(data[summaryField] ?? "") : "",
-        tags: asStrings(data.tags),
+        tags: asStrings(data[tagField]),
+        tagField,
         category:
           typeof data.categoria === "string"
             ? data.categoria
@@ -75,6 +77,8 @@ export async function parseCatalog(repositoryRoot: string): Promise<CatalogEntry
               ? data.area
               : undefined,
         difficulty: typeof data.dificuldade === "string" ? data.dificuldade : undefined,
+        publicationDate:
+          typeof data.dataPublicacao === "string" ? data.dataPublicacao : undefined,
         sourcePath: path.relative(repositoryRoot, absolutePath).replaceAll("\\", "/"),
         outgoingRelations,
         incomingRelations: [],

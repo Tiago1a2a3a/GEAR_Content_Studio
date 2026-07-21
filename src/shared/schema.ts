@@ -48,6 +48,7 @@ export const contentBlockSchema = z.discriminatedUnion("kind", [
     language: nonEmpty,
     code: nonEmpty,
   }),
+  z.object({ id: nonEmpty, kind: z.literal("video"), titulo: nonEmpty, url: httpsUrl }),
   z.object({ id: nonEmpty, kind: z.literal("quote"), markdown: nonEmpty }),
   z.object({ id: nonEmpty, kind: z.literal("separator") }),
 ]);
@@ -152,6 +153,7 @@ const localContentBlockSchema = z.discriminatedUnion("kind", [
     language: z.string(),
     code: z.string(),
   }),
+  z.object({ id: z.string(), kind: z.literal("video"), titulo: z.string(), url: z.string() }),
   z.object({ id: z.string(), kind: z.literal("quote"), markdown: z.string() }),
   z.object({ id: z.string(), kind: z.literal("separator") }),
 ]);

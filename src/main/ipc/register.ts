@@ -24,17 +24,54 @@ export function registerIpc(service: AppService): void {
       .object({
         remoteUrl: z.string(),
         autoUpdateReferencesOnDelete: z.boolean(),
+        advancedMode: z.boolean(),
+        sidebarOrder: z
+          .array(
+            z.enum([
+              "inicio",
+              "catalogo",
+              "nova-aula",
+              "rascunhos",
+              "tags",
+              "configuracao",
+            ]),
+          )
+          .length(6)
+          .refine((value) => new Set(value).size === 6),
       })
       .parse(input);
     const remoteUrl = remoteUrlSchema.parse(parsed.remoteUrl);
     return service.configure({
       remoteUrl,
       autoUpdateReferencesOnDelete: parsed.autoUpdateReferencesOnDelete,
+      advancedMode: parsed.advancedMode,
+      sidebarOrder: parsed.sidebarOrder,
     });
+  });
+  ipcMain.handle("gear:set-advanced-mode", (_event, enabled: unknown) => {
+    const value = z.boolean().parse(enabled);
+    return service.setAdvancedMode(value);
   });
   ipcMain.handle("gear:synchronize", () => service.synchronize());
   ipcMain.handle("gear:list-catalog", (_event, filter: unknown) =>
     service.listCatalog(filterSchema.parse(filter) as CatalogFilter | undefined),
+  );
+  ipcMain.handle("gear:list-tags", () => service.listTags());
+  ipcMain.handle("gear:update-tag", (_event, input: unknown) =>
+    service.updateTag(
+      z
+        .object({
+          tag: z.string().trim().min(1).max(200),
+          replacement: z.string().trim().min(1).max(200).optional(),
+          sourcePath: z.string().max(300).optional(),
+          enabled: z.boolean().optional(),
+        })
+        .refine(
+          (value) => !value.sourcePath || typeof value.enabled === "boolean",
+          "Informe se a tag deve ser adicionada ou removida.",
+        )
+        .parse(input),
+    ),
   );
   ipcMain.handle("gear:choose-images", () => service.chooseImages());
   ipcMain.handle("gear:choose-downloads", () => service.chooseDownloads());
