@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type {
+  AreaCollectionEntry,
   CatalogEntry,
+  CategoryCollectionEntry,
   ContentBlock,
   EnvironmentStatus,
   LessonDraft,
@@ -8,6 +19,7 @@ import type {
   ReviewBundle,
   SidebarItemId,
   TagCollectionEntry,
+  TechnologyCollectionEntry,
 } from "../shared/types";
 import { DEFAULT_SIDEBAR_ORDER } from "../shared/types";
 import { toSlug } from "../shared/slug";
@@ -20,12 +32,95 @@ const randomUUID = () => crypto.randomUUID();
 
 type Screen = SidebarItemId;
 
+type ConfirmOptions = {
+  eyebrow?: string;
+  title: string;
+  message: string;
+  confirmLabel: string;
+  tone?: "default" | "danger";
+};
+
+const ConfirmContext = createContext<(options: ConfirmOptions) => Promise<boolean>>(
+  async () => false,
+);
+
+function useConfirm() {
+  return useContext(ConfirmContext);
+}
+
+function ConfirmProvider({ children }: { children: ReactNode }) {
+  const [pending, setPending] = useState<
+    (ConfirmOptions & { resolve: (confirmed: boolean) => void }) | undefined
+  >();
+
+  const confirm = useCallback(
+    (options: ConfirmOptions) =>
+      new Promise<boolean>((resolve) => setPending({ ...options, resolve })),
+    [],
+  );
+
+  useEffect(() => {
+    if (!pending) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [pending]);
+
+  const close = (confirmed: boolean) => {
+    pending?.resolve(confirmed);
+    setPending(undefined);
+  };
+
+  return (
+    <ConfirmContext.Provider value={confirm}>
+      {children}
+      {pending && (
+        <div
+          className="confirm-backdrop"
+          role="presentation"
+          onMouseDown={() => close(false)}
+        >
+          <section
+            aria-describedby="confirm-message"
+            aria-labelledby="confirm-title"
+            aria-modal="true"
+            className={`confirm-dialog ${pending.tone === "danger" ? "danger" : ""}`}
+            onMouseDown={(event) => event.stopPropagation()}
+            role="dialog"
+          >
+            <span className="eyebrow">{pending.eyebrow ?? "Confirmação"}</span>
+            <h2 id="confirm-title">{pending.title}</h2>
+            <p id="confirm-message">{pending.message}</p>
+            <div className="confirm-actions">
+              <button autoFocus type="button" onClick={() => close(false)}>
+                Cancelar
+              </button>
+              <button
+                className={pending.tone === "danger" ? "danger" : "primary"}
+                type="button"
+                onClick={() => close(true)}
+              >
+                {pending.confirmLabel}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+    </ConfirmContext.Provider>
+  );
+}
+
 const sidebarLabels: Record<SidebarItemId, string> = {
   inicio: "Início",
   catalogo: "Catálogo",
   "nova-aula": "Novo conteúdo",
   rascunhos: "Rascunhos",
   tags: "Coleção • Tags",
+  categorias: "Coleção • Categorias",
+  areas: "Coleção • Áreas",
+  tecnologias: "Coleção • Tecnologias",
   configuracao: "Configurações",
 };
 
@@ -61,6 +156,47 @@ const contentTypeLabel: Record<CatalogEntry["type"], string> = {
   projeto: "Projetos",
   noticia: "Notícias",
 };
+
+const suggestionStopWords = new Set([
+  "a",
+  "ao",
+  "as",
+  "com",
+  "da",
+  "das",
+  "de",
+  "do",
+  "dos",
+  "e",
+  "em",
+  "na",
+  "nas",
+  "no",
+  "nos",
+  "o",
+  "os",
+  "para",
+  "por",
+  "uma",
+  "um",
+]);
+
+const suggestionTokens = (value: string) =>
+  new Set(
+    value
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLocaleLowerCase("pt-BR")
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((token) => token.length >= 3 && !suggestionStopWords.has(token)),
+  );
+
+type MetadataSuggestion = Readonly<{
+  value: string;
+  score: number;
+  usages: number;
+  types: CatalogEntry["type"][];
+}>;
 
 function createDraft(baseCommit = ""): LessonDraft {
   return {
@@ -639,6 +775,7 @@ function TagCollection({
     }>,
   ): Promise<boolean>;
 }) {
+  const confirm = useConfirm();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("title-asc");
   const [selected, setSelected] = useState<TagCollectionEntry>();
@@ -824,9 +961,12 @@ function TagCollection({
                 onClick={async () => {
                   const next = replacement.trim();
                   if (
-                    !window.confirm(
-                      `Renomear a tag “${selected.tag}” para “${next}” em ${selected.usages} arquivo(s) MDX e enviar a alteração para origin/main?`,
-                    )
+                    !(await confirm({
+                      eyebrow: "Alteração global",
+                      title: "Renomear tag em todos os conteúdos?",
+                      message: `A tag “${selected.tag}” será renomeada para “${next}” em ${selected.usages} arquivo(s) MDX e enviada para origin/main.`,
+                      confirmLabel: "Renomear tag",
+                    }))
                   )
                     return;
                   if (await submit({ tag: selected.tag, replacement: next })) {
@@ -842,9 +982,13 @@ function TagCollection({
                 disabled={saving}
                 onClick={async () => {
                   if (
-                    !window.confirm(
-                      `Excluir a tag “${selected.tag}” de ${selected.usages} arquivo(s) MDX e enviar a alteração para origin/main?`,
-                    )
+                    !(await confirm({
+                      eyebrow: "Ação irreversível",
+                      title: "Excluir tag de todos os conteúdos?",
+                      message: `A tag “${selected.tag}” será removida de ${selected.usages} arquivo(s) MDX e a alteração será enviada para origin/main.`,
+                      confirmLabel: "Excluir tag",
+                      tone: "danger",
+                    }))
                   )
                     return;
                   if (await submit({ tag: selected.tag })) setSelected(undefined);
@@ -919,9 +1063,13 @@ function TagCollection({
                         onChange={async (event) => {
                           const enabled = event.target.checked;
                           if (
-                            !window.confirm(
-                              `${enabled ? "Adicionar" : "Remover"} a tag “${selected.tag}” ${enabled ? "ao" : "do"} conteúdo “${entry.titulo}” e enviar para origin/main?`,
-                            )
+                            !(await confirm({
+                              eyebrow: "Coleção de tags",
+                              title: `${enabled ? "Adicionar" : "Remover"} tag deste conteúdo?`,
+                              message: `A tag “${selected.tag}” será ${enabled ? "adicionada ao" : "removida do"} conteúdo “${entry.titulo}” e enviada para origin/main.`,
+                              confirmLabel: enabled ? "Adicionar tag" : "Remover tag",
+                              tone: enabled ? "default" : "danger",
+                            }))
                           )
                             return;
                           await updateMembership({
@@ -954,6 +1102,254 @@ function TagCollection({
   );
 }
 
+function CategoryCollection({
+  categories,
+  catalog,
+  onUpdate,
+  collectionLabel = "Categorias",
+  itemLabel = "categoria",
+  itemPlural = "categorias",
+  onRemoveMembership,
+}: {
+  categories: Array<CategoryCollectionEntry | AreaCollectionEntry>;
+  catalog: CatalogEntry[];
+  onUpdate(
+    input: Readonly<{ category: string; replacement?: string }>,
+  ): Promise<boolean>;
+  collectionLabel?: string;
+  itemLabel?: string;
+  itemPlural?: string;
+  onRemoveMembership?(sourcePath: string, category: string): Promise<boolean>;
+}) {
+  const confirm = useConfirm();
+  const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("title-asc");
+  const [selected, setSelected] = useState<CategoryCollectionEntry>();
+  const [replacement, setReplacement] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [savingPath, setSavingPath] = useState("");
+  const visible = useMemo(() => {
+    const normalized = normalizeTag(query);
+    return categories
+      .filter(
+        (category) =>
+          !normalized || normalizeTag(category.category).includes(normalized),
+      )
+      .sort((first, second) => {
+        if (sort === "usages-desc")
+          return (
+            second.usages - first.usages ||
+            first.category.localeCompare(second.category, "pt-BR")
+          );
+        if (sort === "usages-asc")
+          return (
+            first.usages - second.usages ||
+            first.category.localeCompare(second.category, "pt-BR")
+          );
+        const byName = first.category.localeCompare(second.category, "pt-BR", {
+          sensitivity: "base",
+        });
+        return sort === "title-desc" ? -byName : byName;
+      });
+  }, [categories, query, sort]);
+  const related = useMemo(
+    () =>
+      selected
+        ? catalog.filter((entry) => selected.contentPaths.includes(entry.sourcePath))
+        : [],
+    [catalog, selected],
+  );
+
+  return (
+    <section>
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">Coleção</span>
+          <h1>{collectionLabel}</h1>
+        </div>
+        <span>
+          {categories.length} {itemPlural}
+        </span>
+      </div>
+      <div className="tag-collection-layout">
+        <div className="tag-collection-list panel">
+          <div className="tag-collection-controls">
+            <label>
+              Buscar {itemLabel}
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={`Nome da ${itemLabel}`}
+              />
+            </label>
+            <label>
+              Ordenar
+              <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                <option value="title-asc">Nome: A–Z</option>
+                <option value="title-desc">Nome: Z–A</option>
+                <option value="usages-desc">Mais usadas</option>
+                <option value="usages-asc">Menos usadas</option>
+              </select>
+            </label>
+          </div>
+          <p className="tag-collection-summary">{visible.length} resultado(s)</p>
+          <div className="tag-collection-items">
+            {visible.map((category) => (
+              <button
+                className={selected?.category === category.category ? "active" : ""}
+                type="button"
+                key={category.category}
+                onClick={() => {
+                  setSelected(category);
+                  setReplacement(category.category);
+                }}
+              >
+                <strong>{category.category}</strong>
+                <small>{category.usages} MDX relacionado(s)</small>
+              </button>
+            ))}
+            {!visible.length && (
+              <div className="empty">Nenhuma categoria encontrada.</div>
+            )}
+          </div>
+        </div>
+        <aside className="tag-collection-detail panel">
+          {selected ? (
+            <>
+              <span className="eyebrow">
+                {itemLabel[0]!.toUpperCase() + itemLabel.slice(1)} selecionada
+              </span>
+              <h2>{selected.category}</h2>
+              <p>
+                Esta {itemLabel} aparece em <strong>{selected.usages}</strong>{" "}
+                arquivo(s) MDX.
+              </p>
+              <div className="tag-type-list">
+                {selected.types.map((type) => (
+                  <span className={`badge ${type}`} key={type}>
+                    {type}
+                  </span>
+                ))}
+              </div>
+              <label>
+                Renomear para
+                <input
+                  value={replacement}
+                  onChange={(event) => setReplacement(event.target.value)}
+                  maxLength={200}
+                />
+              </label>
+              <button
+                className="detail-action"
+                type="button"
+                disabled={
+                  saving ||
+                  !replacement.trim() ||
+                  replacement.trim() === selected.category
+                }
+                onClick={async () => {
+                  const next = replacement.trim();
+                  if (
+                    !(await confirm({
+                      eyebrow: "Alteração global",
+                      title: `Renomear ${itemLabel} em todos os conteúdos?`,
+                      message: `A ${itemLabel} “${selected.category}” será renomeada para “${next}” em ${selected.usages} arquivo(s) MDX e enviada para origin/main.`,
+                      confirmLabel: `Renomear ${itemLabel}`,
+                    }))
+                  )
+                    return;
+                  setSaving(true);
+                  if (
+                    await onUpdate({ category: selected.category, replacement: next })
+                  )
+                    setSelected(undefined);
+                  setSaving(false);
+                }}
+              >
+                {saving ? "Salvando…" : "Salvar novo nome"}
+              </button>
+              <button
+                className="danger detail-action"
+                type="button"
+                disabled={saving}
+                onClick={async () => {
+                  if (
+                    !(await confirm({
+                      eyebrow: "Ação irreversível",
+                      title: `Remover ${itemLabel} de todos os conteúdos?`,
+                      message: `A ${itemLabel} “${selected.category}” será removida de ${selected.usages} arquivo(s) MDX e a alteração será enviada para origin/main.`,
+                      confirmLabel: `Remover ${itemLabel}`,
+                      tone: "danger",
+                    }))
+                  )
+                    return;
+                  setSaving(true);
+                  if (await onUpdate({ category: selected.category }))
+                    setSelected(undefined);
+                  setSaving(false);
+                }}
+              >
+                Remover {itemLabel} de todos os conteúdos
+              </button>
+              <div className="tag-membership-heading">
+                <div>
+                  <span className="eyebrow">Conteúdos</span>
+                  <h3>Conteúdos com a {itemLabel}</h3>
+                </div>
+                <span>{related.length}</span>
+              </div>
+              <div className="category-membership-list">
+                {related.map((entry) => (
+                  <label className="category-membership-card" key={entry.sourcePath}>
+                    <input
+                      type="checkbox"
+                      checked
+                      disabled={saving || savingPath === entry.sourcePath}
+                      onChange={async (event) => {
+                        if (event.target.checked || !onRemoveMembership) return;
+                        if (
+                          !(await confirm({
+                            eyebrow: `Coleção de ${itemPlural}`,
+                            title: `Remover ${itemLabel} deste conteúdo?`,
+                            message: `A ${itemLabel} “${selected.category}” será removida somente de “${entry.titulo}” e enviada para origin/main.`,
+                            confirmLabel: `Remover ${itemLabel}`,
+                            tone: "danger",
+                          }))
+                        )
+                          return;
+                        setSavingPath(entry.sourcePath);
+                        try {
+                          await onRemoveMembership(entry.sourcePath, selected.category);
+                        } finally {
+                          setSavingPath("");
+                        }
+                      }}
+                    />
+                    <span className="category-membership-copy">
+                      <strong>{entry.titulo}</strong>
+                      <small>{entry.sourcePath}</small>
+                    </span>
+                    <span className="tag-membership-meta">
+                      <span className={`badge ${entry.type}`}>{entry.type}</span>
+                      <span className={`catalog-status ${entry.status}`}>
+                        {entry.status}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="empty">
+              Selecione uma {itemLabel} para editar ou remover.
+            </div>
+          )}
+        </aside>
+      </div>
+    </section>
+  );
+}
+
 function BlockEditor({
   blocks,
   images,
@@ -963,6 +1359,7 @@ function BlockEditor({
   images: LessonDraft["images"];
   onChange(blocks: ContentBlock[]): void;
 }) {
+  const confirm = useConfirm();
   const [draggedIndex, setDraggedIndex] = useState<number>();
   const add = (kind: ContentBlock["kind"]) => {
     const id = randomUUID();
@@ -1074,8 +1471,16 @@ function BlockEditor({
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (window.confirm("Remover este bloco?")) {
+                  onClick={async () => {
+                    if (
+                      await confirm({
+                        title: "Remover este bloco?",
+                        message:
+                          "O conteúdo deste bloco será removido do rascunho atual.",
+                        confirmLabel: "Remover bloco",
+                        tone: "danger",
+                      })
+                    ) {
                       onChange(
                         blocks.filter((_, currentIndex) => currentIndex !== index),
                       );
@@ -1190,6 +1595,387 @@ function BlockEditor({
   );
 }
 
+function ContentPicker({
+  title,
+  candidates,
+  selectedCount,
+  embedded = false,
+  className = "",
+  isSelected,
+  isUnavailable = () => false,
+  onSelectionChange,
+}: {
+  title: string;
+  candidates: CatalogEntry[];
+  selectedCount: number;
+  embedded?: boolean;
+  className?: string;
+  isSelected(entry: CatalogEntry): boolean;
+  isUnavailable?(entry: CatalogEntry): boolean;
+  onSelectionChange(entry: CatalogEntry, selected: boolean): void;
+}) {
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
+  const [sort, setSort] = useState("title-asc");
+  const [page, setPage] = useState(1);
+  const statuses = useMemo(() => statusesFor(candidates, type), [candidates, type]);
+  const types = useMemo(() => typesFor(candidates, status), [candidates, status]);
+
+  useEffect(() => {
+    if (status && !statuses.includes(status)) setStatus("");
+  }, [status, statuses]);
+  useEffect(() => {
+    if (type && !types.includes(type as CatalogEntry["type"])) setType("");
+  }, [type, types]);
+  useEffect(() => setPage(1), [query, sort, status, type]);
+
+  const options = useMemo(() => {
+    const normalize = (value: string) =>
+      value
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .toLocaleLowerCase("pt-BR");
+    const normalizedQuery = normalize(query.trim());
+    return candidates
+      .filter(
+        (entry) =>
+          isSelected(entry) ||
+          ((!normalizedQuery ||
+            normalize([entry.titulo, entry.slug, ...entry.tags].join(" ")).includes(
+              normalizedQuery,
+            )) &&
+            (!type || entry.type === type) &&
+            (!status || entry.status === status)),
+      )
+      .sort((first, second) => {
+        const byTitle = first.titulo.localeCompare(second.titulo, "pt-BR", {
+          sensitivity: "base",
+        });
+        if (sort === "title-desc") return -byTitle;
+        if (sort === "selected")
+          return Number(isSelected(second)) - Number(isSelected(first)) || byTitle;
+        if (sort === "date-desc" || sort === "date-asc") {
+          if (!first.publicationDate && !second.publicationDate) return byTitle;
+          if (!first.publicationDate) return 1;
+          if (!second.publicationDate) return -1;
+          const byDate = first.publicationDate.localeCompare(second.publicationDate);
+          return byDate === 0 ? byTitle : sort === "date-desc" ? -byDate : byDate;
+        }
+        return byTitle;
+      });
+  }, [candidates, isSelected, query, sort, status, type]);
+
+  const activeFilters =
+    Number(Boolean(type)) + Number(Boolean(status)) + Number(sort !== "title-asc");
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil(options.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visible = options.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const content = (
+    <>
+      <div className="dependency-search">
+        <label className="dependency-search-field">
+          <span>Buscar conteúdo</span>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Digite o título ou slug"
+          />
+        </label>
+        <details className="dependency-filter-menu">
+          <summary>
+            Filtros
+            {activeFilters > 0 && <span>{activeFilters}</span>}
+          </summary>
+          <div className="dependency-filter-popover">
+            <label>
+              Tipo
+              <select value={type} onChange={(event) => setType(event.target.value)}>
+                <option value="">Todos</option>
+                {types.map((entryType) => (
+                  <option value={entryType} key={entryType}>
+                    {contentTypeLabel[entryType]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Estado
+              <select
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {statuses.map((entryStatus) => (
+                  <option value={entryStatus} key={entryStatus}>
+                    {entryStatus}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Ordenar
+              <select value={sort} onChange={(event) => setSort(event.target.value)}>
+                <option value="title-asc">Título: A–Z</option>
+                <option value="title-desc">Título: Z–A</option>
+                <option value="date-desc">Mais recentes</option>
+                <option value="date-asc">Mais antigos</option>
+                <option value="selected">Selecionados primeiro</option>
+              </select>
+            </label>
+            <button
+              type="button"
+              disabled={!activeFilters}
+              onClick={() => {
+                setType("");
+                setStatus("");
+                setSort("title-asc");
+              }}
+            >
+              Limpar filtros
+            </button>
+          </div>
+        </details>
+      </div>
+      <p className="dependency-summary">
+        {options.length
+          ? `Mostrando ${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, options.length)} de ${options.length}`
+          : "0 resultados"}{" "}
+        • {selectedCount} selecionado(s)
+        {query && (
+          <button type="button" onClick={() => setQuery("")}>
+            Limpar busca
+          </button>
+        )}
+      </p>
+      <div className="dependency-grid">
+        {visible.map((entry) => {
+          const checked = isSelected(entry);
+          const unavailable = isUnavailable(entry);
+          return (
+            <label
+              className={`dependency-card${checked ? " selected" : ""}${unavailable ? " unavailable" : ""}`}
+              key={`${entry.type}:${entry.slug}`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={unavailable}
+                onChange={(event) => onSelectionChange(entry, event.target.checked)}
+              />
+              <span className="dependency-card-copy">
+                <strong>{entry.titulo}</strong>
+                <small>
+                  {entry.slug}
+                  {entry.publicationDate
+                    ? ` • ${entry.publicationDate}`
+                    : " • sem data"}
+                </small>
+              </span>
+              <span className="dependency-card-meta">
+                <span className={`badge ${entry.type}`}>{entry.type}</span>
+                <span className={`catalog-status ${entry.status}`}>{entry.status}</span>
+              </span>
+            </label>
+          );
+        })}
+        {!options.length && (
+          <div className="dependency-empty">
+            Nenhum conteúdo encontrado para essa busca.
+          </div>
+        )}
+      </div>
+      {pageCount > 1 && (
+        <nav className="dependency-pagination" aria-label={`Páginas de ${title}`}>
+          <button
+            type="button"
+            disabled={currentPage === 1}
+            onClick={() => setPage((current) => current - 1)}
+          >
+            Anterior
+          </button>
+          <div>
+            {Array.from({ length: pageCount }, (_, index) => index + 1).map(
+              (pageNumber) => (
+                <button
+                  className={pageNumber === currentPage ? "active" : ""}
+                  type="button"
+                  key={pageNumber}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber}
+                </button>
+              ),
+            )}
+          </div>
+          <button
+            type="button"
+            disabled={currentPage === pageCount}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Próxima
+          </button>
+        </nav>
+      )}
+    </>
+  );
+
+  return embedded ? (
+    <div className="content-picker">{content}</div>
+  ) : (
+    <fieldset className={`wide content-picker ${className}`.trim()}>
+      <legend>{title}</legend>
+      {content}
+    </fieldset>
+  );
+}
+
+function MetadataSuggestionPanel({
+  label,
+  suggestions,
+  allCandidates,
+  defaultOpen = false,
+  onApply,
+  onCreate,
+}: {
+  label: string;
+  suggestions: MetadataSuggestion[];
+  allCandidates: MetadataSuggestion[];
+  defaultOpen?: boolean;
+  onApply(value: string): void;
+  onCreate?(value: string): void;
+}) {
+  const [query, setQuery] = useState("");
+  const [type, setType] = useState("");
+  const [sort, setSort] = useState("relevance");
+  const types = useMemo(
+    () => [...new Set(allCandidates.flatMap((suggestion) => suggestion.types))].sort(),
+    [allCandidates],
+  );
+  const visible = useMemo(() => {
+    const normalized = normalizeTag(query);
+    return allCandidates
+      .filter(
+        (suggestion) =>
+          (!normalized || normalizeTag(suggestion.value).includes(normalized)) &&
+          (!type || suggestion.types.includes(type as CatalogEntry["type"])),
+      )
+      .sort((first, second) => {
+        if (sort === "title-asc")
+          return first.value.localeCompare(second.value, "pt-BR");
+        if (sort === "usages")
+          return second.usages - first.usages || second.score - first.score;
+        return (
+          second.score - first.score ||
+          second.usages - first.usages ||
+          first.value.localeCompare(second.value, "pt-BR")
+        );
+      });
+  }, [allCandidates, query, sort, type]);
+  const valueToCreate = query.trim();
+  const alreadyExists = allCandidates.some(
+    (suggestion) => normalizeTag(suggestion.value) === normalizeTag(valueToCreate),
+  );
+  const itemLabel =
+    label === "categorias"
+      ? "categoria"
+      : label === "áreas"
+        ? "área"
+        : label === "tecnologias"
+          ? "tecnologia"
+          : "tag";
+
+  if (!suggestions.length && !allCandidates.length && !onCreate) return null;
+  return (
+    <div className="metadata-suggestions">
+      {suggestions.length ? (
+        <div className="metadata-recommendations">
+          <div className="metadata-suggestions-heading">
+            <strong>Sugestões de {label}</strong>
+            <span>{suggestions.length}</span>
+          </div>
+          <div className="metadata-suggestion-list metadata-recommendation-list">
+            {suggestions.slice(0, 8).map((suggestion) => (
+              <button
+                type="button"
+                key={suggestion.value}
+                onClick={() => onApply(suggestion.value)}
+              >
+                <span>{suggestion.value}</span>
+                <small>{suggestion.usages} uso(s)</small>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      <details className="metadata-explorer" open={defaultOpen}>
+        <summary>Buscar e filtrar {label} existentes</summary>
+        <div className="metadata-suggestions-controls">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={`Buscar sugestão de ${label}`}
+          />
+          <select
+            value={type}
+            onChange={(event) => setType(event.target.value)}
+            aria-label={`Filtrar sugestões de ${label} por tipo`}
+          >
+            <option value="">Todos os tipos</option>
+            {types.map((entryType) => (
+              <option value={entryType} key={entryType}>
+                {contentTypeLabel[entryType]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sort}
+            onChange={(event) => setSort(event.target.value)}
+            aria-label={`Ordenar sugestões de ${label}`}
+          >
+            <option value="relevance">Mais relacionadas</option>
+            <option value="usages">Mais usadas</option>
+            <option value="title-asc">Nome: A–Z</option>
+          </select>
+        </div>
+        {onCreate && valueToCreate && !alreadyExists ? (
+          <button
+            className="metadata-create-option"
+            type="button"
+            onClick={() => {
+              onCreate(valueToCreate);
+              setQuery("");
+            }}
+          >
+            Criar {itemLabel} “{valueToCreate}”
+          </button>
+        ) : null}
+        <div className="metadata-suggestion-list">
+          {visible.map((suggestion) => (
+            <button
+              type="button"
+              key={suggestion.value}
+              onClick={() => onApply(suggestion.value)}
+            >
+              <span>{suggestion.value}</span>
+              <small>{suggestion.usages} uso(s)</small>
+            </button>
+          ))}
+          {!visible.length && (
+            <small className="metadata-suggestion-empty">
+              Nenhuma sugestão corresponde aos filtros.
+            </small>
+          )}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 function LessonEditor({
   initialDraft,
   catalog,
@@ -1203,6 +1989,7 @@ function LessonEditor({
   onDraftChange(draft: LessonDraft): void;
   advancedMode: boolean;
 }) {
+  const confirm = useConfirm();
   const [draft, setDraft] = useState(initialDraft);
   const [step, setStep] = useState(1);
   const [error, setError] = useState("");
@@ -1239,6 +2026,115 @@ function LessonEditor({
 
   const lessons = catalog.filter((entry) => entry.type === "aula");
   const courses = catalog.filter((entry) => entry.type === "curso");
+  const metadataSuggestions = useMemo(() => {
+    const selectedEntries =
+      draft.contentType === "curso"
+        ? catalog.filter((entry) => (draft.aulaSlugs ?? []).includes(entry.slug))
+        : draft.contentType === "trilha"
+          ? catalog.filter((entry) =>
+              (draft.trilhaItens ?? []).some(
+                (item) => item.tipo === entry.type && item.slug === entry.slug,
+              ),
+            )
+          : [];
+    const bodyText = draft.contentType === "aula" ? JSON.stringify(draft.body) : "";
+    const context = [
+      draft.titulo,
+      draft.resumo,
+      bodyText,
+      ...selectedEntries.flatMap((entry) => [
+        entry.titulo,
+        entry.summary,
+        entry.category ?? "",
+        ...entry.tags,
+      ]),
+    ].join(" ");
+    const contextTokens = suggestionTokens(context);
+    const supportedEntries = catalog.filter((entry) =>
+      ["aula", "curso", "noticia"].includes(entry.type),
+    );
+    const collect = (field: "tag" | "category", entries = supportedEntries) => {
+      const values = new Map<
+        string,
+        { value: string; usages: number; types: Set<CatalogEntry["type"]> }
+      >();
+      for (const entry of entries) {
+        const source =
+          field === "tag" ? entry.tags : entry.category ? [entry.category] : [];
+        for (const rawValue of source) {
+          const value = rawValue.trim();
+          const key = normalizeTag(value);
+          if (!key) continue;
+          const current = values.get(key) ?? {
+            value,
+            usages: 0,
+            types: new Set<CatalogEntry["type"]>(),
+          };
+          current.usages += 1;
+          current.types.add(entry.type);
+          values.set(key, current);
+        }
+      }
+      return [...values.values()]
+        .map((candidate) => ({
+          ...candidate,
+          score: [...suggestionTokens(candidate.value)].filter((token) =>
+            contextTokens.has(token),
+          ).length,
+          types: [...candidate.types],
+        }))
+        .map(({ value, usages, types, score }) => ({ value, usages, types, score }));
+    };
+    const currentTags = new Set(draft.tags.map(normalizeTag));
+    const allTags = collect("tag");
+    const allCategories = collect("category");
+    const allAreas = collect(
+      "category",
+      catalog.filter((entry) => entry.type === "trilha"),
+    );
+    const allTechnologies = collect(
+      "tag",
+      catalog.filter((entry) => entry.type === "projeto"),
+    );
+    return {
+      tags: allTags.filter(
+        (suggestion) =>
+          suggestion.score > 0 && !currentTags.has(normalizeTag(suggestion.value)),
+      ),
+      allTags,
+      categories: allCategories.filter(
+        (suggestion) =>
+          suggestion.score > 0 &&
+          normalizeTag(suggestion.value) !== normalizeTag(draft.categoria ?? ""),
+      ),
+      allCategories,
+      areas: allAreas.filter(
+        (suggestion) =>
+          suggestion.score > 0 &&
+          normalizeTag(suggestion.value) !== normalizeTag(draft.categoria ?? ""),
+      ),
+      allAreas,
+      technologies: allTechnologies.filter(
+        (suggestion) =>
+          suggestion.score > 0 &&
+          !(draft.tecnologias ?? []).some(
+            (technology) => normalizeTag(technology) === normalizeTag(suggestion.value),
+          ),
+      ),
+      allTechnologies,
+    };
+  }, [
+    catalog,
+    draft.aulaSlugs,
+    draft.body,
+    draft.categoria,
+    draft.contentType,
+    draft.resumo,
+    draft.tags,
+    draft.tecnologias,
+    draft.trilhaItens,
+    draft.titulo,
+  ]);
   const prerequisiteCandidates = useMemo(
     () => (draft.contentType === "curso" ? [...lessons, ...courses] : lessons),
     [courses, draft.contentType, lessons],
@@ -1355,7 +2251,13 @@ function LessonEditor({
   const write = async () => {
     if (
       !review ||
-      !window.confirm("Confirmar escrita dos arquivos listados no clone gerenciado?")
+      !(await confirm({
+        eyebrow: "Primeira confirmação",
+        title: "Escrever os arquivos no clone?",
+        message:
+          "Os arquivos revisados serão gravados no clone gerenciado. Nada será enviado ao GitHub nesta etapa.",
+        confirmLabel: "Escrever arquivos",
+      }))
     )
       return;
     setBusy(true);
@@ -1372,9 +2274,13 @@ function LessonEditor({
   const publishNow = async () => {
     if (
       !publish ||
-      !window.confirm(
-        `Publicar em origin/main com a mensagem:\n${publish.commitMessage}\n\nEsta é a segunda confirmação.`,
-      )
+      !(await confirm({
+        eyebrow: "Segunda confirmação • publicação",
+        title: "Enviar conteúdo para origin/main?",
+        message: `Será criado e enviado um commit com a mensagem “${publish.commitMessage}”. O Portal iniciará o deploy após o push.`,
+        confirmLabel: "Publicar agora",
+        tone: "danger",
+      }))
     )
       return;
     setBusy(true);
@@ -1474,21 +2380,61 @@ function LessonEditor({
           )}
           {draft.contentType === "projeto" && (
             <>
-              <label>
-                Tecnologias, separadas por vírgula
-                <input
-                  value={(draft.tecnologias ?? []).join(", ")}
-                  onChange={(event) =>
+              <div className="metadata-field wide">
+                <div className="metadata-selected-field">
+                  <strong>Tecnologias</strong>
+                  <div className="metadata-selected-values">
+                    {(draft.tecnologias ?? []).map((technology) => (
+                      <button
+                        type="button"
+                        key={technology}
+                        onClick={() =>
+                          set(
+                            "tecnologias",
+                            (draft.tecnologias ?? []).filter(
+                              (current) =>
+                                normalizeTag(current) !== normalizeTag(technology),
+                            ),
+                          )
+                        }
+                        title={`Remover a tecnologia ${technology}`}
+                      >
+                        {technology} <span aria-hidden="true">×</span>
+                      </button>
+                    ))}
+                    {!(draft.tecnologias ?? []).length && (
+                      <small>Escolha ou crie tecnologias abaixo.</small>
+                    )}
+                  </div>
+                </div>
+                <MetadataSuggestionPanel
+                  label="tecnologias"
+                  suggestions={metadataSuggestions.technologies}
+                  allCandidates={metadataSuggestions.allTechnologies}
+                  onApply={(value) =>
                     set(
                       "tecnologias",
-                      event.target.value
-                        .split(",")
-                        .map((value) => value.trim())
-                        .filter(Boolean),
+                      (draft.tecnologias ?? []).some(
+                        (technology) =>
+                          normalizeTag(technology) === normalizeTag(value),
+                      )
+                        ? draft.tecnologias
+                        : [...(draft.tecnologias ?? []), value],
+                    )
+                  }
+                  onCreate={(value) =>
+                    set(
+                      "tecnologias",
+                      (draft.tecnologias ?? []).some(
+                        (technology) =>
+                          normalizeTag(technology) === normalizeTag(value),
+                      )
+                        ? draft.tecnologias
+                        : [...(draft.tecnologias ?? []), value],
                     )
                   }
                 />
-              </label>
+              </div>
               <label>
                 Documentação HTTPS
                 <input
@@ -1557,22 +2503,6 @@ function LessonEditor({
               />
             </label>
           )}
-          <label className="wide">
-            Resumo
-            <textarea
-              value={draft.resumo}
-              onChange={(event) => set("resumo", event.target.value)}
-            />
-          </label>
-          {draft.contentType !== "projeto" && (
-            <label>
-              {draft.contentType === "trilha" ? "Área" : "Categoria"}
-              <input
-                value={draft.categoria ?? ""}
-                onChange={(event) => set("categoria", event.target.value || undefined)}
-              />
-            </label>
-          )}
           {(draft.contentType === "aula" ||
             draft.contentType === "curso" ||
             !draft.contentType) && (
@@ -1590,22 +2520,89 @@ function LessonEditor({
               </select>
             </label>
           )}
+          <label className="wide">
+            Resumo
+            <textarea
+              value={draft.resumo}
+              onChange={(event) => set("resumo", event.target.value)}
+            />
+          </label>
+          {draft.contentType !== "projeto" && (
+            <div className="metadata-field wide">
+              <label>
+                {draft.contentType === "trilha" ? "Área" : "Categoria"}
+                <input
+                  value={draft.categoria ?? ""}
+                  readOnly
+                  placeholder={`Escolha ou crie ${draft.contentType === "trilha" ? "uma área" : "uma categoria"} abaixo`}
+                />
+              </label>
+              {draft.contentType === "trilha" ? (
+                <MetadataSuggestionPanel
+                  label="áreas"
+                  suggestions={metadataSuggestions.areas}
+                  allCandidates={metadataSuggestions.allAreas}
+                  onApply={(value) => set("categoria", value)}
+                  onCreate={(value) => set("categoria", value)}
+                />
+              ) : (
+                <MetadataSuggestionPanel
+                  label="categorias"
+                  suggestions={metadataSuggestions.categories}
+                  allCandidates={metadataSuggestions.allCategories}
+                  onApply={(value) => set("categoria", value)}
+                  onCreate={(value) => set("categoria", value)}
+                />
+              )}
+            </div>
+          )}
           {["aula", "curso", "noticia"].includes(draft.contentType ?? "aula") && (
-            <label>
-              Tags, separadas por vírgula
-              <input
-                value={draft.tags.join(", ")}
-                onChange={(event) =>
+            <div className="metadata-field wide">
+              <div className="metadata-selected-field">
+                <strong>Tags</strong>
+                <div className="metadata-selected-values">
+                  {draft.tags.map((tag) => (
+                    <button
+                      type="button"
+                      key={tag}
+                      onClick={() =>
+                        set(
+                          "tags",
+                          draft.tags.filter(
+                            (current) => normalizeTag(current) !== normalizeTag(tag),
+                          ),
+                        )
+                      }
+                      title={`Remover a tag ${tag}`}
+                    >
+                      {tag} <span aria-hidden="true">×</span>
+                    </button>
+                  ))}
+                  {!draft.tags.length && <small>Escolha ou crie tags abaixo.</small>}
+                </div>
+              </div>
+              <MetadataSuggestionPanel
+                label="tags"
+                suggestions={metadataSuggestions.tags}
+                allCandidates={metadataSuggestions.allTags}
+                onApply={(value) =>
                   set(
                     "tags",
-                    event.target.value
-                      .split(",")
-                      .map((value) => value.trim())
-                      .filter(Boolean),
+                    draft.tags.some((tag) => normalizeTag(tag) === normalizeTag(value))
+                      ? draft.tags
+                      : [...draft.tags, value],
+                  )
+                }
+                onCreate={(value) =>
+                  set(
+                    "tags",
+                    draft.tags.some((tag) => normalizeTag(tag) === normalizeTag(value))
+                      ? draft.tags
+                      : [...draft.tags, value],
                   )
                 }
               />
-            </label>
+            </div>
           )}
           {(draft.contentType === "aula" ||
             draft.contentType === "noticia" ||
@@ -1666,119 +2663,148 @@ function LessonEditor({
       {step === 3 && (
         <div className="form-grid">
           {draft.contentType === "curso" && (
-            <fieldset className="wide">
-              <legend>Aulas do Curso</legend>
-              <div className="choice-grid">
-                {lessons.map((lesson) => (
-                  <label className="check" key={lesson.slug}>
-                    <input
-                      type="checkbox"
-                      checked={(draft.aulaSlugs ?? []).includes(lesson.slug)}
-                      disabled={
-                        draft.status === "publicado" && lesson.status !== "publicado"
-                      }
-                      onChange={(event) =>
-                        set(
-                          "aulaSlugs",
-                          event.target.checked
-                            ? [...(draft.aulaSlugs ?? []), lesson.slug]
-                            : (draft.aulaSlugs ?? []).filter(
-                                (slug) => slug !== lesson.slug,
-                              ),
-                        )
-                      }
-                    />
-                    {lesson.titulo} <small>({lesson.status})</small>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <>
+              <ContentPicker
+                title="Aulas do Curso"
+                className="course-items-picker"
+                candidates={lessons}
+                selectedCount={(draft.aulaSlugs ?? []).length}
+                isSelected={(entry) => (draft.aulaSlugs ?? []).includes(entry.slug)}
+                isUnavailable={(entry) =>
+                  draft.status === "publicado" && entry.status !== "publicado"
+                }
+                onSelectionChange={(entry, selected) =>
+                  set(
+                    "aulaSlugs",
+                    selected
+                      ? [...(draft.aulaSlugs ?? []), entry.slug]
+                      : (draft.aulaSlugs ?? []).filter((slug) => slug !== entry.slug),
+                  )
+                }
+              />
+              {(draft.aulaSlugs ?? []).length > 0 && (
+                <section className="trail-order panel course-order">
+                  <span className="eyebrow">Ordem do curso</span>
+                  <h3>Sequência das aulas</h3>
+                  <ol>
+                    {(draft.aulaSlugs ?? []).map((slug, index) => (
+                      <li key={slug}>
+                        {index + 1}. aula: {slug}{" "}
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => {
+                            const next = [...(draft.aulaSlugs ?? [])];
+                            [next[index - 1], next[index]] = [
+                              next[index]!,
+                              next[index - 1]!,
+                            ];
+                            set("aulaSlugs", next);
+                          }}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === (draft.aulaSlugs?.length ?? 0) - 1}
+                          onClick={() => {
+                            const next = [...(draft.aulaSlugs ?? [])];
+                            [next[index], next[index + 1]] = [
+                              next[index + 1]!,
+                              next[index]!,
+                            ];
+                            set("aulaSlugs", next);
+                          }}
+                        >
+                          ↓
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              )}
+            </>
           )}
           {draft.contentType === "trilha" && (
-            <fieldset className="wide">
-              <legend>Itens da Trilha, na ordem de seleção</legend>
-              <div className="choice-grid">
-                {[...lessons, ...courses].map((entry) => {
-                  const selectedItem = (draft.trilhaItens ?? []).some(
-                    (item) => item.tipo === entry.type && item.slug === entry.slug,
-                  );
-                  return (
-                    <label className="check" key={`${entry.type}:${entry.slug}`}>
-                      <input
-                        type="checkbox"
-                        checked={selectedItem}
-                        disabled={
-                          draft.status === "publicado" && entry.status !== "publicado"
-                        }
-                        onChange={(event) =>
-                          set(
-                            "trilhaItens",
-                            event.target.checked
-                              ? [
-                                  ...(draft.trilhaItens ?? []),
-                                  {
-                                    tipo: entry.type as "aula" | "curso",
-                                    slug: entry.slug,
-                                  },
-                                ]
-                              : (draft.trilhaItens ?? []).filter(
-                                  (item) =>
-                                    !(
-                                      item.tipo === entry.type &&
-                                      item.slug === entry.slug
-                                    ),
-                                ),
-                          )
-                        }
-                      />
-                      {entry.type}: {entry.titulo} <small>({entry.status})</small>
-                    </label>
-                  );
-                })}
-              </div>
+            <>
+              <fieldset className="wide">
+                <legend>Itens da Trilha, na ordem de seleção</legend>
+                <ContentPicker
+                  embedded
+                  title="Itens da Trilha"
+                  candidates={[...lessons, ...courses]}
+                  selectedCount={(draft.trilhaItens ?? []).length}
+                  isSelected={(entry) =>
+                    (draft.trilhaItens ?? []).some(
+                      (item) => item.tipo === entry.type && item.slug === entry.slug,
+                    )
+                  }
+                  isUnavailable={(entry) =>
+                    draft.status === "publicado" && entry.status !== "publicado"
+                  }
+                  onSelectionChange={(entry, selected) =>
+                    set(
+                      "trilhaItens",
+                      selected
+                        ? [
+                            ...(draft.trilhaItens ?? []),
+                            { tipo: entry.type as "aula" | "curso", slug: entry.slug },
+                          ]
+                        : (draft.trilhaItens ?? []).filter(
+                            (item) =>
+                              !(item.tipo === entry.type && item.slug === entry.slug),
+                          ),
+                    )
+                  }
+                />
+              </fieldset>
               {(draft.trilhaItens ?? []).length > 0 && (
-                <ol>
-                  {(draft.trilhaItens ?? []).map((item, index) => (
-                    <li key={`${item.tipo}:${item.slug}`}>
-                      {item.tipo}: {item.slug}{" "}
-                      <button
-                        type="button"
-                        disabled={index === 0}
-                        onClick={() => {
-                          const next = [...(draft.trilhaItens ?? [])];
-                          [next[index - 1], next[index]] = [
-                            next[index]!,
-                            next[index - 1]!,
-                          ];
-                          set("trilhaItens", next);
-                        }}
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        disabled={index === (draft.trilhaItens?.length ?? 0) - 1}
-                        onClick={() => {
-                          const next = [...(draft.trilhaItens ?? [])];
-                          [next[index], next[index + 1]] = [
-                            next[index + 1]!,
-                            next[index]!,
-                          ];
-                          set("trilhaItens", next);
-                        }}
-                      >
-                        ↓
-                      </button>
-                    </li>
-                  ))}
-                </ol>
+                <section className="trail-order panel course-order">
+                  <span className="eyebrow">Ordem da trilha</span>
+                  <h3>Sequência de itens</h3>
+                  <ol>
+                    {(draft.trilhaItens ?? []).map((item, index) => (
+                      <li key={`${item.tipo}:${item.slug}`}>
+                        {item.tipo}: {item.slug}{" "}
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => {
+                            const next = [...(draft.trilhaItens ?? [])];
+                            [next[index - 1], next[index]] = [
+                              next[index]!,
+                              next[index - 1]!,
+                            ];
+                            set("trilhaItens", next);
+                          }}
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === (draft.trilhaItens?.length ?? 0) - 1}
+                          onClick={() => {
+                            const next = [...(draft.trilhaItens ?? [])];
+                            [next[index], next[index + 1]] = [
+                              next[index + 1]!,
+                              next[index]!,
+                            ];
+                            set("trilhaItens", next);
+                          }}
+                        >
+                          ↓
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
               )}
-            </fieldset>
+            </>
           )}
           {(draft.contentType === "aula" ||
             draft.contentType === "curso" ||
             !draft.contentType) && (
-            <fieldset className="wide">
+            <fieldset className="wide prerequisite-picker">
               <legend>Pré-requisitos</legend>
               <div className="dependency-search">
                 <label className="dependency-search-field">
@@ -2206,11 +3232,15 @@ function LessonEditor({
   );
 }
 
-export function App() {
+function AppContent() {
+  const confirm = useConfirm();
   const [screen, setScreen] = useState<Screen>("inicio");
   const [environment, setEnvironment] = useState<EnvironmentStatus>();
   const [catalog, setCatalog] = useState<CatalogEntry[]>([]);
   const [tags, setTags] = useState<TagCollectionEntry[]>([]);
+  const [categories, setCategories] = useState<CategoryCollectionEntry[]>([]);
+  const [areas, setAreas] = useState<AreaCollectionEntry[]>([]);
+  const [technologies, setTechnologies] = useState<TechnologyCollectionEntry[]>([]);
   const [drafts, setDrafts] = useState<LessonDraft[]>([]);
   const [activeDraft, setActiveDraft] = useState<LessonDraft>();
   const [remoteUrl, setRemoteUrl] = useState(EXPECTED_REMOTE_URL);
@@ -2237,13 +3267,23 @@ export function App() {
   }, [notice]);
 
   const refresh = async () => {
-    const [environmentResult, catalogResult, tagsResult, draftsResult] =
-      await Promise.all([
-        window.gearContentStudio.environmentCheck(),
-        window.gearContentStudio.listCatalog(),
-        window.gearContentStudio.listTags(),
-        window.gearContentStudio.listDrafts(),
-      ]);
+    const [
+      environmentResult,
+      catalogResult,
+      tagsResult,
+      categoriesResult,
+      areasResult,
+      technologiesResult,
+      draftsResult,
+    ] = await Promise.all([
+      window.gearContentStudio.environmentCheck(),
+      window.gearContentStudio.listCatalog(),
+      window.gearContentStudio.listTags(),
+      window.gearContentStudio.listCategories(),
+      window.gearContentStudio.listAreas(),
+      window.gearContentStudio.listTechnologies(),
+      window.gearContentStudio.listDrafts(),
+    ]);
     if (environmentResult.ok) {
       setEnvironment(environmentResult.value);
       setAutoUpdateReferencesOnDelete(
@@ -2256,6 +3296,9 @@ export function App() {
     }
     if (catalogResult.ok) setCatalog(catalogResult.value);
     if (tagsResult.ok) setTags(tagsResult.value);
+    if (categoriesResult.ok) setCategories(categoriesResult.value);
+    if (areasResult.ok) setAreas(areasResult.value);
+    if (technologiesResult.ok) setTechnologies(technologiesResult.value);
     if (draftsResult.ok) {
       setDrafts((current) => {
         const merged = new Map(
@@ -2291,6 +3334,46 @@ export function App() {
         `Sincronização falhou após 2 tentativas: ${unexpectedErrorMessage(caught)}`,
       );
       return undefined;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const removeCollectionMembership = async (
+    kind: "category" | "area" | "technology",
+    sourcePath: string,
+    value: string,
+  ): Promise<boolean> => {
+    setBusy(true);
+    setError("");
+    try {
+      const result =
+        kind === "technology"
+          ? await window.gearContentStudio.updateTag({
+              tag: value,
+              sourcePath,
+              enabled: false,
+              scope: "technology",
+            })
+          : await window.gearContentStudio.updateCategory({
+              category: value,
+              sourcePath,
+              enabled: false,
+              scope: kind,
+            });
+      if (!result.ok) {
+        setError(`${result.error.title}: ${result.error.message}`);
+        return false;
+      }
+      await refresh();
+      setNotice(
+        `Item removido deste conteúdo em origin/main (${result.value.commit.slice(0, 8)}).`,
+      );
+      return true;
+    } catch (caught) {
+      setError(
+        `Não foi possível atualizar o conteúdo: ${unexpectedErrorMessage(caught)}`,
+      );
+      return false;
     } finally {
       setBusy(false);
     }
@@ -2397,17 +3480,25 @@ export function App() {
             }}
             onDelete={async (entry) => {
               if (
-                !window.confirm(
-                  `Excluir ${entry.sourcePath}? Esta ação removerá o MDX do GitHub.`,
-                )
+                !(await confirm({
+                  eyebrow: "Primeira confirmação",
+                  title: "Excluir este conteúdo?",
+                  message: `O arquivo ${entry.sourcePath} será removido do GitHub. Você ainda terá uma segunda confirmação antes do envio.`,
+                  confirmLabel: "Continuar exclusão",
+                  tone: "danger",
+                }))
               )
                 return false;
               if (
-                !window.confirm(
-                  environment?.autoUpdateReferencesOnDelete
-                    ? `Confirma novamente a exclusão de ${entry.slug}? As referências em outros conteúdos serão removidas automaticamente no mesmo commit.`
-                    : `Confirma novamente a exclusão de ${entry.slug}? Dependências existentes bloquearão a operação.`,
-                )
+                !(await confirm({
+                  eyebrow: "Segunda confirmação • exclusão",
+                  title: `Excluir “${entry.titulo}” definitivamente?`,
+                  message: environment?.autoUpdateReferencesOnDelete
+                    ? "As referências em outros conteúdos também serão removidas automaticamente no mesmo commit."
+                    : "Se houver dependências, a operação será bloqueada para proteger o conteúdo relacionado.",
+                  confirmLabel: "Excluir do GitHub",
+                  tone: "danger",
+                }))
               )
                 return false;
               setBusy(true);
@@ -2469,6 +3560,115 @@ export function App() {
             }}
           />
         )}
+        {screen === "categorias" && (
+          <CategoryCollection
+            categories={categories}
+            catalog={catalog}
+            onUpdate={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await window.gearContentStudio.updateCategory(input);
+                if (!result.ok) {
+                  setError(`${result.error.title}: ${result.error.message}`);
+                  return false;
+                }
+                await refresh();
+                setNotice(
+                  `Coleção de categorias atualizada em origin/main (${result.value.commit.slice(0, 8)}). ${result.value.updatedPaths.length} arquivo(s) MDX foram alterados.`,
+                );
+                return true;
+              } catch (caught) {
+                setError(
+                  `Não foi possível atualizar a categoria: ${unexpectedErrorMessage(caught)}`,
+                );
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onRemoveMembership={(sourcePath, area) =>
+              removeCollectionMembership("area", sourcePath, area)
+            }
+          />
+        )}
+        {screen === "areas" && (
+          <CategoryCollection
+            categories={areas}
+            catalog={catalog}
+            collectionLabel="Áreas"
+            itemLabel="área"
+            itemPlural="áreas"
+            onUpdate={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await window.gearContentStudio.updateCategory({
+                  ...input,
+                  scope: "area",
+                });
+                if (!result.ok) {
+                  setError(`${result.error.title}: ${result.error.message}`);
+                  return false;
+                }
+                await refresh();
+                setNotice(
+                  `Coleção de áreas atualizada em origin/main (${result.value.commit.slice(0, 8)}). ${result.value.updatedPaths.length} arquivo(s) MDX foram alterados.`,
+                );
+                return true;
+              } catch (caught) {
+                setError(
+                  `Não foi possível atualizar a área: ${unexpectedErrorMessage(caught)}`,
+                );
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onRemoveMembership={(sourcePath, technology) =>
+              removeCollectionMembership("technology", sourcePath, technology)
+            }
+          />
+        )}
+        {screen === "tecnologias" && (
+          <CategoryCollection
+            categories={technologies}
+            catalog={catalog}
+            collectionLabel="Tecnologias"
+            itemLabel="tecnologia"
+            itemPlural="tecnologias"
+            onUpdate={async (input) => {
+              setBusy(true);
+              setError("");
+              try {
+                const result = await window.gearContentStudio.updateTag({
+                  tag: input.category,
+                  replacement: input.replacement,
+                  scope: "technology",
+                });
+                if (!result.ok) {
+                  setError(`${result.error.title}: ${result.error.message}`);
+                  return false;
+                }
+                await refresh();
+                setNotice(
+                  `Coleção de tecnologias atualizada em origin/main (${result.value.commit.slice(0, 8)}). ${result.value.updatedPaths.length} arquivo(s) MDX foram alterados.`,
+                );
+                return true;
+              } catch (caught) {
+                setError(
+                  `Não foi possível atualizar a tecnologia: ${unexpectedErrorMessage(caught)}`,
+                );
+                return false;
+              } finally {
+                setBusy(false);
+              }
+            }}
+            onRemoveMembership={(sourcePath, category) =>
+              removeCollectionMembership("category", sourcePath, category)
+            }
+          />
+        )}
         {screen === "nova-aula" && activeDraft && (
           <LessonEditor
             key={activeDraft.id}
@@ -2511,7 +3711,16 @@ export function App() {
                     </button>
                     <button
                       onClick={async () => {
-                        if (!window.confirm("Excluir este rascunho local?")) return;
+                        if (
+                          !(await confirm({
+                            title: "Excluir rascunho local?",
+                            message:
+                              "Este rascunho será removido apenas deste computador e não afeta o GitHub.",
+                            confirmLabel: "Excluir rascunho",
+                            tone: "danger",
+                          }))
+                        )
+                          return;
                         const result = await window.gearContentStudio.deleteDraft(
                           draft.id,
                         );
@@ -2627,21 +3836,82 @@ export function App() {
                 ))}
               </ol>
             </div>
+            <div className="local-recovery-setting">
+              <div>
+                <strong>Operação local travada</strong>
+                <small>
+                  Libera uma ação interrompida e preserva arquivos que não possam ser
+                  revertidos com segurança.
+                </small>
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  if (
+                    !(await confirm({
+                      eyebrow: "Recuperação local",
+                      title: "Cancelar uma operação local interrompida?",
+                      message:
+                        "O Studio tentará desfazer somente arquivos temporários seguros e liberará o bloqueio local. Conteúdos publicados não serão apagados.",
+                      confirmLabel: "Cancelar operação local",
+                      tone: "danger",
+                    }))
+                  )
+                    return;
+                  setBusy(true);
+                  setError("");
+                  try {
+                    const result =
+                      await window.gearContentStudio.recoverLocalOperation();
+                    if (!result.ok) {
+                      setError(result.error.message);
+                      return;
+                    }
+                    await refresh();
+                    setNotice(
+                      result.value.preservedPaths.length
+                        ? "Operação local liberada. Alguns arquivos foram preservados para segurança."
+                        : "Operação local cancelada e bloqueio liberado.",
+                    );
+                  } catch (caught) {
+                    setError(
+                      `Não foi possível cancelar a operação local: ${unexpectedErrorMessage(caught)}`,
+                    );
+                  } finally {
+                    setBusy(false);
+                  }
+                }}
+              >
+                Cancelar operação local
+              </button>
+            </div>
             <button
               className="primary"
               onClick={async () => {
                 setBusy(true);
-                const result = await window.gearContentStudio.configure({
-                  remoteUrl,
-                  autoUpdateReferencesOnDelete,
-                  advancedMode,
-                  sidebarOrder,
-                });
-                setBusy(false);
-                if (!result.ok) return setError(result.error.message);
-                await window.gearContentStudio.setAdvancedMode(advancedMode);
-                await refresh();
-                setScreen("inicio");
+                setError("");
+                try {
+                  const result = await window.gearContentStudio.configure({
+                    remoteUrl,
+                    autoUpdateReferencesOnDelete,
+                    advancedMode,
+                    sidebarOrder,
+                  });
+                  if (!result.ok) {
+                    setError(result.error.message);
+                    return;
+                  }
+                  await window.gearContentStudio.setAdvancedMode(advancedMode);
+                  await refresh();
+                  setScreen("inicio");
+                } catch (caught) {
+                  setError(
+                    `Não foi possível salvar a configuração: ${unexpectedErrorMessage(caught)}`,
+                  );
+                } finally {
+                  setBusy(false);
+                }
               }}
             >
               {busy ? "Salvando…" : "Salvar configuração"}
@@ -2650,5 +3920,13 @@ export function App() {
         )}
       </main>
     </div>
+  );
+}
+
+export function App() {
+  return (
+    <ConfirmProvider>
+      <AppContent />
+    </ConfirmProvider>
   );
 }

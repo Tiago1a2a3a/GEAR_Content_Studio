@@ -10,6 +10,12 @@ import { AppService } from "./service";
 
 let mainWindow: BrowserWindow | undefined;
 
+function applicationIconPath(): string {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "gear-icon.ico")
+    : path.join(app.getAppPath(), "resources", "gear-icon.ico");
+}
+
 function configureLocalUserData(): void {
   if (app.commandLine.hasSwitch("user-data-dir")) return;
   const configuredLocalAppData = process.env.LOCALAPPDATA;
@@ -35,6 +41,7 @@ async function createWindow(): Promise<void> {
   );
   mainWindow = new BrowserWindow({
     title: "GEAR Content Studio",
+    icon: applicationIconPath(),
     width: 1280,
     height: 840,
     minWidth: 1024,

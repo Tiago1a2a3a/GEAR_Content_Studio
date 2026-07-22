@@ -166,15 +166,40 @@ export class AppService implements GearContentStudioApi {
     return this.wrap("LIST_TAGS", () => this.#publisher.listTags());
   }
 
+  async listCategories() {
+    return this.wrap("LIST_CATEGORIES", () => this.#publisher.listCategories());
+  }
+
+  async listAreas() {
+    return this.wrap("LIST_AREAS", () => this.#publisher.listAreas());
+  }
+
+  async listTechnologies() {
+    return this.wrap("LIST_TECHNOLOGIES", () => this.#publisher.listTechnologies());
+  }
+
   async updateTag(
     input: Readonly<{
       tag: string;
       replacement?: string;
       sourcePath?: string;
       enabled?: boolean;
+      scope?: "tag" | "technology";
     }>,
   ) {
     return this.wrap("UPDATE_TAG", () => this.#publisher.updateTag(input));
+  }
+
+  async updateCategory(
+    input: Readonly<{
+      category: string;
+      replacement?: string;
+      scope?: "category" | "area";
+      sourcePath?: string;
+      enabled?: boolean;
+    }>,
+  ) {
+    return this.wrap("UPDATE_CATEGORY", () => this.#publisher.updateCategory(input));
   }
 
   async chooseImages() {
@@ -253,6 +278,18 @@ export class AppService implements GearContentStudioApi {
 
   async cancelOperation(operationId: string) {
     return this.wrap("CANCEL_OPERATION", () => this.#publisher.cancel(operationId));
+  }
+
+  async recoverLocalOperation() {
+    return this.wrap("RECOVER_LOCAL_OPERATION", async () => {
+      const interrupted = await this.#publisher.inspectInterruptedOperation();
+      if (!interrupted) {
+        throw new Error(
+          "Não há uma operação local interrompida para cancelar. Se outro processo ainda estiver ativo, aguarde a conclusão ou feche somente a outra instância do Studio.",
+        );
+      }
+      return this.#publisher.recoverInterruptedOperation(interrupted.operationId);
+    });
   }
 
   async openExternalHttps(url: string): Promise<Result<void>> {

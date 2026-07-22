@@ -53,6 +53,7 @@
   "build": {
     "appId": "br.ufmg.gear.contentstudio",
     "productName": "GEAR Content Studio",
+    "icon": "resources/gear-icon.ico",
     "asar": true,
     "files": [
       "out/**/*",
@@ -67,6 +68,10 @@
       {
         "from": "docs",
         "to": "docs"
+      },
+      {
+        "from": "resources/gear-icon.ico",
+        "to": "gear-icon.ico"
       }
     ],
     "win": {

@@ -14,12 +14,16 @@ import { serializeLesson } from "../../shared/serializer";
 import { removeContentReference } from "../../shared/reference-rewriter";
 import { normalizeTag, rewriteTags } from "../../shared/tag-collection";
 import type {
+  AreaCollectionEntry,
   CatalogEntry,
+  CategoryCollectionEntry,
+  CategoryMutationResult,
   LessonDraft,
   PublishBundle,
   ReviewBundle,
   TagCollectionEntry,
   TagMutationResult,
+  TechnologyCollectionEntry,
   ValidationIssue,
 } from "../../shared/types";
 import { validateDraft } from "../../shared/validation";
@@ -225,17 +229,167 @@ export class Publisher {
     return buildTagCollection(await this.repository.catalog(true));
   }
 
+  async listCategories(): Promise<CategoryCollectionEntry[]> {
+    return buildCategoryCollection(await this.repository.catalog(true));
+  }
+
+  async listAreas(): Promise<AreaCollectionEntry[]> {
+    return buildAreaCollection(await this.repository.catalog(true));
+  }
+
+  async listTechnologies(): Promise<TechnologyCollectionEntry[]> {
+    return buildTechnologyCollection(await this.repository.catalog(true));
+  }
+
+  async updateCategory(
+    input: Readonly<{
+      category: string;
+      replacement?: string;
+      scope?: "category" | "area";
+      sourcePath?: string;
+      enabled?: boolean;
+    }>,
+  ): Promise<CategoryMutationResult> {
+    const category = input.category.trim();
+    const replacement = input.replacement?.trim();
+    const isArea = input.scope === "area";
+    const isMembershipUpdate = Boolean(input.sourcePath);
+    const field = isArea ? "area" : "categoria";
+    if (isMembershipUpdate && typeof input.enabled !== "boolean") {
+      throw new Error("Informe se o item deve ser adicionado ou removido.");
+    }
+    if (isMembershipUpdate && !isAllowedContentPath(input.sourcePath!)) {
+      throw new Error("Só é permitido atualizar um MDX de conteúdo do Portal.");
+    }
+    if (!category) throw new Error("Informe a categoria que será alterada.");
+    if (input.replacement !== undefined && !replacement) {
+      throw new Error("A nova categoria não pode ficar vazia.");
+    }
+    if (replacement && normalizeTag(category) === normalizeTag(replacement)) {
+      throw new Error("A nova categoria precisa ser diferente da atual.");
+    }
+
+    await this.repository.ensureClean();
+    await requireGit(this.repository.repositoryPath, [
+      "fetch",
+      "--prune",
+      "origin",
+      "main",
+    ]);
+    const baseCommit = await this.repository.currentCommit();
+    if (baseCommit !== (await this.repository.remoteCommit())) {
+      throw new Error(
+        "A main local está desatualizada. Sincronize antes de alterar categorias.",
+      );
+    }
+    const affectedEntries = (await this.repository.catalog(true)).filter((entry) => {
+      const supported = isArea
+        ? entry.type === "trilha"
+        : entry.type === "aula" || entry.type === "curso" || entry.type === "noticia";
+      if (!supported) return false;
+      if (isMembershipUpdate) return entry.sourcePath === input.sourcePath;
+      return normalizeTag(entry.category ?? "") === normalizeTag(category);
+    });
+    if (!affectedEntries.length)
+      throw new Error("A categoria não foi encontrada no catálogo.");
+    if (
+      isMembershipUpdate &&
+      normalizeTag(affectedEntries[0]?.category ?? "") !== normalizeTag(category)
+    ) {
+      throw new Error("O conteúdo não possui este item para ser removido.");
+    }
+    const changedPaths = affectedEntries.map((entry) => entry.sourcePath);
+    assertAllowedPaths(changedPaths);
+
+    const operationId = randomUUID();
+    await this.#lock.acquire(operationId);
+    let committed = false;
+    try {
+      for (const entry of affectedEntries) {
+        const filePath = await resolveConfinedForWrite(
+          this.repository.repositoryPath,
+          entry.sourcePath,
+        );
+        const parsed = matter(await readFile(filePath, "utf8"));
+        const data = { ...parsed.data };
+        if (isMembershipUpdate) {
+          if (input.enabled) data[field] = category;
+          else delete data[field];
+        } else if (replacement) data[field] = replacement;
+        else delete data[field];
+        await writeFile(filePath, matter.stringify(parsed.content, data), "utf8");
+      }
+      await this.repository.validatePortalCommand();
+      await requireGit(this.repository.repositoryPath, ["add", "--", ...changedPaths]);
+      const stagedPaths = (
+        await requireGit(this.repository.repositoryPath, [
+          "diff",
+          "--cached",
+          "--name-only",
+          "-z",
+        ])
+      )
+        .split("\0")
+        .filter(Boolean);
+      assertExactPaths(stagedPaths, changedPaths, "stage da coleção de categorias");
+      const collectionName = isArea ? "areas" : "categorias";
+      const commitMessage = replacement
+        ? `content(${collectionName}): renomeia ${category} para ${replacement}`
+        : `content(${collectionName}): remove ${category}`;
+      await requireGit(this.repository.repositoryPath, ["commit", "-m", commitMessage]);
+      committed = true;
+      await requireGit(this.repository.repositoryPath, [
+        "fetch",
+        "--prune",
+        "origin",
+        "main",
+      ]);
+      if ((await this.repository.remoteCommit()) !== baseCommit)
+        throw new Error(
+          "A main remota mudou após o commit. O commit local foi preservado e não foi enviado.",
+        );
+      await requireGit(this.repository.repositoryPath, ["push", "origin", "HEAD:main"]);
+      const commit = await this.repository.currentCommit();
+      await requireGit(this.repository.repositoryPath, [
+        "fetch",
+        "--prune",
+        "origin",
+        "main",
+      ]);
+      if ((await this.repository.remoteCommit()) !== commit)
+        throw new Error(
+          "O push da alteração de categorias não foi confirmado em origin/main.",
+        );
+      return { commit, pushedTo: "origin/main", updatedPaths: changedPaths };
+    } catch (error) {
+      if (!committed)
+        await requireGit(this.repository.repositoryPath, [
+          "restore",
+          "--source=HEAD",
+          "--staged",
+          "--worktree",
+          "--",
+          ...changedPaths,
+        ]).catch(() => undefined);
+      throw error;
+    } finally {
+      await this.#lock.release(operationId);
+    }
+  }
+
   async updateTag(
     input: Readonly<{
       tag: string;
       replacement?: string;
       sourcePath?: string;
       enabled?: boolean;
+      scope?: "tag" | "technology";
     }>,
   ): Promise<TagMutationResult> {
     const tag = input.tag.trim();
     const replacement = input.replacement?.trim();
     const isMembershipUpdate = Boolean(input.sourcePath);
+    const isTechnology = input.scope === "technology";
     if (!tag) throw new Error("Informe a tag que será alterada.");
     if (isMembershipUpdate && typeof input.enabled !== "boolean") {
       throw new Error("Informe se a tag deve ser adicionada ou removida.");
@@ -268,8 +422,10 @@ export class Publisher {
     const catalog = await this.repository.catalog(true);
     const affectedEntries = isMembershipUpdate
       ? catalog.filter((entry) => entry.sourcePath === input.sourcePath)
-      : catalog.filter((entry) =>
-          entry.tags.some((current) => normalizeTag(current) === normalizeTag(tag)),
+      : catalog.filter(
+          (entry) =>
+            (!isTechnology || entry.type === "projeto") &&
+            entry.tags.some((current) => normalizeTag(current) === normalizeTag(tag)),
         );
     if (!affectedEntries.length)
       throw new Error(
@@ -294,8 +450,9 @@ export class Publisher {
         );
         const original = await readFile(filePath, "utf8");
         const parsed = matter(original);
-        const tagField =
-          entry.tagField ?? (entry.type === "projeto" ? "tecnologias" : "tags");
+        const tagField = isTechnology
+          ? "tecnologias"
+          : (entry.tagField ?? (entry.type === "projeto" ? "tecnologias" : "tags"));
         const existingTags = Array.isArray(parsed.data[tagField])
           ? parsed.data[tagField].filter(
               (current): current is string => typeof current === "string",
@@ -869,5 +1026,105 @@ function buildTagCollection(entries: readonly CatalogEntry[]): TagCollectionEntr
     }))
     .sort((first, second) =>
       first.tag.localeCompare(second.tag, "pt-BR", { sensitivity: "base" }),
+    );
+}
+
+function buildCategoryCollection(
+  entries: readonly CatalogEntry[],
+): CategoryCollectionEntry[] {
+  const collection = new Map<
+    string,
+    { category: string; contentPaths: string[]; types: Set<CatalogEntry["type"]> }
+  >();
+  for (const entry of entries) {
+    if (entry.type !== "aula" && entry.type !== "curso" && entry.type !== "noticia")
+      continue;
+    const category = entry.category?.trim() ?? "";
+    const key = normalizeTag(category);
+    if (!key) continue;
+    const current = collection.get(key) ?? {
+      category,
+      contentPaths: [],
+      types: new Set<CatalogEntry["type"]>(),
+    };
+    current.contentPaths.push(entry.sourcePath);
+    current.types.add(entry.type);
+    collection.set(key, current);
+  }
+  return [...collection.values()]
+    .map((entry) => ({
+      category: entry.category,
+      usages: entry.contentPaths.length,
+      contentPaths: entry.contentPaths.sort(),
+      types: [...entry.types].sort(),
+    }))
+    .sort((first, second) =>
+      first.category.localeCompare(second.category, "pt-BR", { sensitivity: "base" }),
+    );
+}
+
+function buildAreaCollection(entries: readonly CatalogEntry[]): AreaCollectionEntry[] {
+  const collection = new Map<
+    string,
+    { category: string; contentPaths: string[]; types: Set<CatalogEntry["type"]> }
+  >();
+  for (const entry of entries) {
+    if (entry.type !== "trilha") continue;
+    const category = entry.category?.trim() ?? "";
+    const key = normalizeTag(category);
+    if (!key) continue;
+    const current = collection.get(key) ?? {
+      category,
+      contentPaths: [],
+      types: new Set<CatalogEntry["type"]>(),
+    };
+    current.contentPaths.push(entry.sourcePath);
+    current.types.add(entry.type);
+    collection.set(key, current);
+  }
+  return [...collection.values()]
+    .map((entry) => ({
+      category: entry.category,
+      usages: entry.contentPaths.length,
+      contentPaths: entry.contentPaths.sort(),
+      types: [...entry.types].sort(),
+    }))
+    .sort((first, second) =>
+      first.category.localeCompare(second.category, "pt-BR", { sensitivity: "base" }),
+    );
+}
+
+function buildTechnologyCollection(
+  entries: readonly CatalogEntry[],
+): TechnologyCollectionEntry[] {
+  const collection = new Map<
+    string,
+    { category: string; contentPaths: string[]; types: Set<CatalogEntry["type"]> }
+  >();
+  for (const entry of entries) {
+    if (entry.type !== "projeto") continue;
+    for (const technology of entry.tags) {
+      const value = technology.trim();
+      const key = normalizeTag(value);
+      if (!key) continue;
+      const current = collection.get(key) ?? {
+        category: value,
+        contentPaths: [],
+        types: new Set<CatalogEntry["type"]>(),
+      };
+      current.contentPaths.push(entry.sourcePath);
+      current.types.add(entry.type);
+      collection.set(key, current);
+    }
+  }
+  return [...collection.values()]
+    .map((entry) => ({
+      category: entry.category,
+      usages: entry.contentPaths.length,
+      contentPaths: entry.contentPaths.sort(),
+      types: [...entry.types].sort(),
+    }))
+    .sort((first, second) =>
+      first.category.localeCompare(second.category, "pt-BR", { sensitivity: "base" }),
     );
 }

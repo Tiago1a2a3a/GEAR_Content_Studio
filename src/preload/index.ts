@@ -10,6 +10,10 @@ const api: GearContentStudioApi = {
   listCatalog: (filter) => ipcRenderer.invoke("gear:list-catalog", filter),
   listTags: () => ipcRenderer.invoke("gear:list-tags"),
   updateTag: (input) => ipcRenderer.invoke("gear:update-tag", input),
+  listCategories: () => ipcRenderer.invoke("gear:list-categories"),
+  listAreas: () => ipcRenderer.invoke("gear:list-areas"),
+  listTechnologies: () => ipcRenderer.invoke("gear:list-technologies"),
+  updateCategory: (input) => ipcRenderer.invoke("gear:update-category", input),
   chooseImages: () => ipcRenderer.invoke("gear:choose-images"),
   chooseDownloads: () => ipcRenderer.invoke("gear:choose-downloads"),
   loadPublished: (input) => ipcRenderer.invoke("gear:load-published", input),
@@ -23,6 +27,7 @@ const api: GearContentStudioApi = {
     ipcRenderer.invoke("gear:confirm-publish", operationId),
   cancelOperation: (operationId) =>
     ipcRenderer.invoke("gear:cancel-operation", operationId),
+  recoverLocalOperation: () => ipcRenderer.invoke("gear:recover-local-operation"),
   openExternalHttps: (url) => ipcRenderer.invoke("gear:open-external", url),
   copyDiagnostic: (detailsId) => ipcRenderer.invoke("gear:copy-diagnostic", detailsId),
   deletePublished: (input) => ipcRenderer.invoke("gear:delete-published", input),

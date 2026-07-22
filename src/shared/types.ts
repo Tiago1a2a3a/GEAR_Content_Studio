@@ -18,6 +18,9 @@ export const DEFAULT_SIDEBAR_ORDER = [
   "nova-aula",
   "rascunhos",
   "tags",
+  "categorias",
+  "areas",
+  "tecnologias",
   "configuracao",
 ] as const;
 
@@ -129,6 +132,21 @@ export type TagMutationResult = Readonly<{
   updatedPaths: string[];
 }>;
 
+export type CategoryCollectionEntry = Readonly<{
+  category: string;
+  usages: number;
+  contentPaths: string[];
+  types: ContentType[];
+}>;
+
+export type AreaCollectionEntry = CategoryCollectionEntry;
+export type TechnologyCollectionEntry = CategoryCollectionEntry;
+export type CategoryMutationResult = TagMutationResult;
+
+export type LocalOperationRecovery = Readonly<{
+  preservedPaths: string[];
+}>;
+
 export type ValidationIssue = Readonly<{
   severity: "error" | "warning";
   code: string;
@@ -181,14 +199,27 @@ export type GearContentStudioApi = Readonly<{
   synchronize(): Promise<Result<Readonly<{ commit: string; indexedEntries: number }>>>;
   listCatalog(filter?: CatalogFilter): Promise<Result<CatalogEntry[]>>;
   listTags(): Promise<Result<TagCollectionEntry[]>>;
+  listCategories(): Promise<Result<CategoryCollectionEntry[]>>;
+  listAreas(): Promise<Result<AreaCollectionEntry[]>>;
+  listTechnologies(): Promise<Result<TechnologyCollectionEntry[]>>;
   updateTag(
     input: Readonly<{
       tag: string;
       replacement?: string;
       sourcePath?: string;
       enabled?: boolean;
+      scope?: "tag" | "technology";
     }>,
   ): Promise<Result<TagMutationResult>>;
+  updateCategory(
+    input: Readonly<{
+      category: string;
+      replacement?: string;
+      scope?: "category" | "area";
+      sourcePath?: string;
+      enabled?: boolean;
+    }>,
+  ): Promise<Result<CategoryMutationResult>>;
   chooseImages(): Promise<Result<PendingImage[]>>;
   chooseDownloads(): Promise<Result<PendingDownload[]>>;
   loadPublished(input: Readonly<{ sourcePath: string }>): Promise<Result<LessonDraft>>;
@@ -202,6 +233,7 @@ export type GearContentStudioApi = Readonly<{
     operationId: string,
   ): Promise<Result<Readonly<{ commit: string; pushedTo: "origin/main" }>>>;
   cancelOperation(operationId: string): Promise<Result<void>>;
+  recoverLocalOperation(): Promise<Result<LocalOperationRecovery>>;
   openExternalHttps(url: string): Promise<Result<void>>;
   copyDiagnostic(detailsId: string): Promise<Result<string>>;
   deletePublished(input: Readonly<{ sourcePath: string }>): Promise<

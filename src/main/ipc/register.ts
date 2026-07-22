@@ -2,7 +2,7 @@ import { ipcMain } from "electron";
 import { z } from "zod";
 
 import { lessonDraftSchema, remoteUrlSchema } from "../../shared/schema";
-import type { CatalogFilter } from "../../shared/types";
+import { DEFAULT_SIDEBAR_ORDER, type CatalogFilter } from "../../shared/types";
 import type { AppService } from "../service";
 
 const idSchema = z.string().min(8).max(128);
@@ -26,18 +26,9 @@ export function registerIpc(service: AppService): void {
         autoUpdateReferencesOnDelete: z.boolean(),
         advancedMode: z.boolean(),
         sidebarOrder: z
-          .array(
-            z.enum([
-              "inicio",
-              "catalogo",
-              "nova-aula",
-              "rascunhos",
-              "tags",
-              "configuracao",
-            ]),
-          )
-          .length(6)
-          .refine((value) => new Set(value).size === 6),
+          .array(z.enum(DEFAULT_SIDEBAR_ORDER))
+          .length(DEFAULT_SIDEBAR_ORDER.length)
+          .refine((value) => new Set(value).size === DEFAULT_SIDEBAR_ORDER.length),
       })
       .parse(input);
     const remoteUrl = remoteUrlSchema.parse(parsed.remoteUrl);
@@ -57,6 +48,9 @@ export function registerIpc(service: AppService): void {
     service.listCatalog(filterSchema.parse(filter) as CatalogFilter | undefined),
   );
   ipcMain.handle("gear:list-tags", () => service.listTags());
+  ipcMain.handle("gear:list-categories", () => service.listCategories());
+  ipcMain.handle("gear:list-areas", () => service.listAreas());
+  ipcMain.handle("gear:list-technologies", () => service.listTechnologies());
   ipcMain.handle("gear:update-tag", (_event, input: unknown) =>
     service.updateTag(
       z
@@ -65,10 +59,28 @@ export function registerIpc(service: AppService): void {
           replacement: z.string().trim().min(1).max(200).optional(),
           sourcePath: z.string().max(300).optional(),
           enabled: z.boolean().optional(),
+          scope: z.enum(["tag", "technology"]).optional(),
         })
         .refine(
           (value) => !value.sourcePath || typeof value.enabled === "boolean",
           "Informe se a tag deve ser adicionada ou removida.",
+        )
+        .parse(input),
+    ),
+  );
+  ipcMain.handle("gear:update-category", (_event, input: unknown) =>
+    service.updateCategory(
+      z
+        .object({
+          category: z.string().trim().min(1).max(200),
+          replacement: z.string().trim().min(1).max(200).optional(),
+          scope: z.enum(["category", "area"]).optional(),
+          sourcePath: z.string().max(300).optional(),
+          enabled: z.boolean().optional(),
+        })
+        .refine(
+          (value) => !value.sourcePath || typeof value.enabled === "boolean",
+          "Informe se o item deve ser adicionado ou removido.",
         )
         .parse(input),
     ),
@@ -100,6 +112,7 @@ export function registerIpc(service: AppService): void {
   ipcMain.handle("gear:cancel-operation", (_event, operationId: unknown) =>
     service.cancelOperation(idSchema.parse(operationId)),
   );
+  ipcMain.handle("gear:recover-local-operation", () => service.recoverLocalOperation());
   ipcMain.handle("gear:open-external", (_event, url: unknown) =>
     service.openExternalHttps(z.string().url().parse(url)),
   );
