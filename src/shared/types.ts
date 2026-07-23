@@ -186,6 +186,9 @@ export type EnvironmentStatus = Readonly<{
 }>;
 
 export type GearContentStudioApi = Readonly<{
+  windowMinimize?(): Promise<void>;
+  windowToggleMaximize?(): Promise<boolean>;
+  windowClose?(): Promise<void>;
   environmentCheck(): Promise<Result<EnvironmentStatus>>;
   configure(
     input: Readonly<{

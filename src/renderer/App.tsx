@@ -3414,6 +3414,17 @@ function AppContent() {
           <i className={environment?.configured ? "online" : ""} />
           {environment?.configured ? "Git configurado" : "Configuração necessária"}
         </span>
+        <div className="window-controls" aria-label="Controles da janela">
+          <button type="button" aria-label="Minimizar" onClick={() => void window.gearContentStudio.windowMinimize?.()}>
+            <span>−</span>
+          </button>
+          <button type="button" aria-label="Maximizar ou restaurar" onClick={() => void window.gearContentStudio.windowToggleMaximize?.()}>
+            <span className="maximize-glyph" />
+          </button>
+          <button className="window-close" type="button" aria-label="Fechar" onClick={() => void window.gearContentStudio.windowClose?.()}>
+            <span>×</span>
+          </button>
+        </div>
       </header>
       <aside className="sidebar">
         {sidebarOrder.map((value) => (

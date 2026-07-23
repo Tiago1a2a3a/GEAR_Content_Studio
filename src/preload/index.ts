@@ -3,6 +3,9 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { GearContentStudioApi } from "../shared/types";
 
 const api: GearContentStudioApi = {
+  windowMinimize: () => ipcRenderer.invoke("gear:window-minimize"),
+  windowToggleMaximize: () => ipcRenderer.invoke("gear:window-toggle-maximize"),
+  windowClose: () => ipcRenderer.invoke("gear:window-close"),
   environmentCheck: () => ipcRenderer.invoke("gear:environment-check"),
   configure: (input) => ipcRenderer.invoke("gear:configure", input),
   setAdvancedMode: (enabled) => ipcRenderer.invoke("gear:set-advanced-mode", enabled),

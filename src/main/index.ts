@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { app, BrowserWindow, session } from "electron";
+import { app, BrowserWindow, ipcMain, session } from "electron";
 
 import { createDirectories } from "./filesystem/storage";
 import { loadSettings } from "./filesystem/storage";
@@ -42,6 +42,7 @@ async function createWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
     title: "GEAR Content Studio",
     icon: applicationIconPath(),
+    frame: false,
     width: 1280,
     height: 840,
     minWidth: 1024,
@@ -55,6 +56,17 @@ async function createWindow(): Promise<void> {
       webSecurity: true,
     },
   });
+  ipcMain.removeHandler("gear:window-minimize");
+  ipcMain.removeHandler("gear:window-toggle-maximize");
+  ipcMain.removeHandler("gear:window-close");
+  ipcMain.handle("gear:window-minimize", () => mainWindow?.minimize());
+  ipcMain.handle("gear:window-toggle-maximize", () => {
+    if (!mainWindow) return false;
+    if (mainWindow.isMaximized()) mainWindow.unmaximize();
+    else mainWindow.maximize();
+    return mainWindow.isMaximized();
+  });
+  ipcMain.handle("gear:window-close", () => mainWindow?.close());
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   mainWindow.webContents.on("will-navigate", (event) => event.preventDefault());
   mainWindow.once("ready-to-show", () => mainWindow?.show());
